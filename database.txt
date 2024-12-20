@@ -46,7 +46,7 @@ CREATE TABLE payments (
 
 
 
-//DATABASE 2
+//DATABASE 2:
 CREATE DATABASE IF NOT EXISTS login_system;
 USE login_system;
 
