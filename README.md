@@ -1,4 +1,4 @@
--vứt file bài tập vào xampp/htdocs/
+-vứt file bài tập vào xampp/htdocs/ or laragon/www
 
 -chạy xampp và mở phpMyAdmin
 
