@@ -40,8 +40,10 @@ function renderRoomsByBuilding(buildings, rooms) {
         const buildingRooms = rooms.filter(room => room.building_id === building.id);
         
         buildingSection.innerHTML = `
-            <h2 onclick="openEditBuilding(${building.id}, '${building.name}')" style="cursor: pointer;">
-                Tòa ${building.name}
+            <h2>
+                <span class="building-name" onclick="openEditBuilding(${building.id}, '${building.name}')">
+                    Tòa ${building.name}
+                </span>
             </h2>
             <div class="building-rooms">
                 ${buildingRooms.length ? 
@@ -53,8 +55,7 @@ function renderRoomsByBuilding(buildings, rooms) {
         
         roomGrid.appendChild(buildingSection);
     });
-}
-//tạo card hiển thị thông tin phòng
+}//tạo card hiển thị thông tin phòng
 function createRoomCard(room) {
     const canRegister = room.status === 'available' && room.current_occupants < room.max_occupants;
     
@@ -1025,3 +1026,22 @@ async function updateStudent(event) {
         alert('Có lỗi xảy ra khi cập nhật thông tin');
     }
 }
+// ... existing code ...
+
+// Sửa lại hàm closeStudentList
+function closeStudentList() {
+    document.getElementById('studentListModal').style.display = 'none';
+}
+
+// Thêm event listener chỉ cho studentListModal
+document.addEventListener('DOMContentLoaded', function() {
+    const studentListModal = document.getElementById('studentListModal');
+    studentListModal.addEventListener('click', function(event) {
+        // Chỉ đóng modal nếu click vào phần nền (không phải modal-content)
+        if (event.target === studentListModal) {
+            closeStudentList();
+        }
+    });
+    
+
+});

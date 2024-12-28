@@ -347,7 +347,7 @@ button:hover::before {
 }
 
 .building-section h2 {
-  cursor: pointer;
+  cursor: default;
   user-select: none;
   padding: 10px;
   background: var(--light);
@@ -355,19 +355,9 @@ button:hover::before {
   transition: background-color 0.3s ease;
 }
 
-.building-section h2:hover {
-  background: var(--primary);
-  color: white;
-}
-
 .dark-mode .building-section h2 {
   background: var(--dark-card);
   color: var(--dark-text);
-}
-
-.building-section h2:hover {
-  background: var(--light);
-  color: var(--text);
 }
 
 .building-rooms {
@@ -683,7 +673,7 @@ button:disabled:hover {
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 5px;
+    border-radius: 11px;
     transition: all 0.3s ease;
     width: 55px;
     height: 55px;
@@ -1389,7 +1379,7 @@ button:disabled:hover {
 .close-sidebar {
     position: absolute;
     top: 10px;
-    right: 230px;
+    right: 10px;
     background: none;
     border: none;
     font-size: 24px;
@@ -1461,4 +1451,38 @@ button:disabled:hover {
         width: 100%;
         max-width: 100%;
     }
+}
+
+/* Thêm style cho tên tòa nhà */
+.building-name {
+    display: inline-block;
+    cursor: pointer;
+    transition: color 0.3s ease;
+    padding: 5px 10px;
+    border-radius: 4px;
+}
+
+.building-name:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+/* Sửa lại style cho building section header */
+.building-section h2 {
+    cursor: default;
+    user-select: none;
+    padding: 10px;
+    background: var(--light);
+    border-radius: 4px;
+    transition: background-color 0.3s ease;
+    display: flex;
+    align-items: center;
+}
+
+.dark-mode .building-section h2 {
+    background: var(--dark-card);
+}
+
+.dark-mode .building-name:hover {
+  color: var(--light);
 }
