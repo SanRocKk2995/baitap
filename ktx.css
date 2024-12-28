@@ -1139,12 +1139,6 @@ button:disabled:hover {
         bottom: 10px;
         right: 10px;
     }
-
-    /* Hamburger menu position */
-    .hamburger-menu {
-        top: 10px;
-        left: 10px;
-    }
 }
 
 /* Tablet adjustments */
