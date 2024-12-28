@@ -49,13 +49,14 @@
         <i class="fas fa-times"></i>
     </button>
     <div class="sidebar-content">
+      <button onclick="filterRooms('all')"><i class="fas fa-home"></i> Trang Chủ</button>
         <div class="dropdown">
             <button class="dropdown-btn" onclick="toggleDropdown('roomManagement')">
                 <i class="fas fa-building"></i> Quản Lý Phòng
                 <i class="fas fa-chevron-down"></i>
             </button>
             <div class="dropdown-content" id="roomManagement">
-                <button onclick="filterRooms('all')"><i class="fas fa-building"></i> Tất Cả Phòng</button>
+  
                 <button onclick="filterRooms('available')"><i class="fas fa-door-open"></i> Phòng Còn Trống</button>
                 <button onclick="filterRooms('occupied')"><i class="fas fa-users"></i> Phòng Đủ Người</button>
                 <button onclick="filterRooms('issues')"><i class="fas fa-exclamation-triangle"></i> Phòng Có Sự Cố</button>
@@ -73,12 +74,8 @@
                 <button onclick="showUnpaidStudents()"><i class="fas fa-user-clock"></i> Sinh Viên Chưa Đóng Tiền</button>
             </div>
         </div>
-        <button class="dropdown-btn" onclick="window.location.href = 'dulieu.php';">
-          <i class="fas fa-file-export"></i> Xuất,Thêm file
-        </button>
-        <button class="dropdown-btn" onclick="window.location.href = 'index.php';">
-            <i class="fas fa-sign-out-alt"></i> Đăng Xuất
-        </button>
+        <button onclick="window.location.href = 'dulieu.php';"><i class="fas fa-file-export"></i> Xuất,Thêm file</button>
+        <button onclick="window.location.href = 'index.php';"><i class="fas fa-sign-out-alt"></i> Đăng Xuất</button>
     </div>
   </div>
   

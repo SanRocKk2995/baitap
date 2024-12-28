@@ -726,19 +726,6 @@ function toggleSidebar() {
     }
 }
 
-// Đóng sidebar khi click ra ngoài
-document.addEventListener('click', function(event) {
-    const sidebar = document.getElementById('sidebar');
-    const hamburgerMenu = document.querySelector('.hamburger-menu');
-    
-    if (!sidebar.contains(event.target) && 
-        !hamburgerMenu.contains(event.target) && 
-        sidebar.classList.contains('open')) {
-        sidebar.classList.remove('open');
-        hamburgerMenu.style.display = 'flex';
-    }
-});
-
 function openEditBuilding(buildingId, buildingName) {
     document.getElementById('editBuildingId').value = buildingId;
     document.getElementById('editBuildingName').value = buildingName;
