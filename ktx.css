@@ -34,7 +34,6 @@ body.dark-mode {
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
-  padding-left: 80px;
   transition: all 0.3s ease;
   position: relative;
   z-index: 1;
@@ -42,7 +41,7 @@ body.dark-mode {
 
 .sidebar.open + .container {
   margin-left: 300px;
-  padding-left: 20px;
+  width: calc(100% - 300px);
 }
 
 .header {
@@ -57,6 +56,7 @@ body.dark-mode {
   position: relative;
   padding-right: 20px;
   z-index: 998;
+  width: 100%;
 }
 
 .header h1 {
@@ -1427,4 +1427,38 @@ button:disabled:hover {
 .sidebar-content {
     padding-top: 60px; /* Tăng padding-top để tránh che phủ nút đóng */
     padding: 60px 20px 20px 20px;
+}
+
+/* Media queries cho responsive */
+@media (max-width: 1024px) {
+    .sidebar.open + .container {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .sidebar.open ~ .header {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .sidebar {
+        width: 100%;
+        max-width: 300px;
+    }
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+
+    .sidebar.open + .container {
+        margin-left: 0;
+        padding: 10px;
+    }
+
+    .sidebar {
+        width: 100%;
+        max-width: 100%;
+    }
 }
