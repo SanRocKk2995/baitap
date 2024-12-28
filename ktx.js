@@ -1038,5 +1038,3 @@ async function updateStudent(event) {
         alert('Có lỗi xảy ra khi cập nhật thông tin');
     }
 }
-
-    
