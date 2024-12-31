@@ -1486,3 +1486,11 @@ button:disabled:hover {
 .dark-mode .building-name:hover {
   color: var(--light);
 }
+.swal-button--cancel {
+  position: relative;
+  right: 235px;
+}
+
+.swal-footer {
+  text-align: center !important;
+}

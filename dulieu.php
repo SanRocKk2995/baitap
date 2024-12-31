@@ -23,7 +23,6 @@ function exportDataToCSV() {
         'Email',
         'Số Điện Thoại',
         'Khoa',
-        'Trạng Thái Thanh Toán',
         'Ngày Đăng Ký'
     ));
     
@@ -38,7 +37,6 @@ function exportDataToCSV() {
                 reg.student_email,
                 reg.student_phone,
                 reg.student_faculty,
-                'Chưa có thông tin' as payment_status,
                 reg.registration_date
             FROM rooms r
             LEFT JOIN buildings b ON r.building_id = b.id
@@ -56,7 +54,6 @@ function exportDataToCSV() {
                 $row['student_email'] ?? 'N/A',
                 $row['student_phone'] ?? 'N/A',
                 $row['student_faculty'] ?? 'N/A',
-                $row['payment_status'] ?? 'N/A',
                 $row['registration_date'] ?? 'N/A'
             ));
         }
@@ -88,61 +85,82 @@ function importDataFromCSV($file) {
         // Bỏ qua dòng header
         fgetcsv($handle);
         
+        $rowNumber = 1; // Theo dõi số dòng đang xử lý
+        
         // Đọc từng dòng trong file CSV
         while (($data = fgetcsv($handle)) !== FALSE) {
-            // Kiểm tra xem tòa nhà đã tồn tại chưa
-            $stmt = $pdo->prepare("SELECT id FROM buildings WHERE name = ?");
-            $stmt->execute([$data[1]]);
-            $building = $stmt->fetch();
-            
-            if (!$building) {
-                // Thêm tòa nhà mới
-                $stmt = $pdo->prepare("INSERT INTO buildings (name) VALUES (?)");
-                $stmt->execute([$data[1]]);
-                $buildingId = $pdo->lastInsertId();
-            } else {
-                $buildingId = $building['id'];
-            }
-            
-            // Kiểm tra và thêm/cập nhật phòng
-            $stmt = $pdo->prepare("SELECT id FROM rooms WHERE number = ? AND building_id = ?");
-            $stmt->execute([$data[0], $buildingId]);
-            $room = $stmt->fetch();
-            
-            if (!$room) {
-                // Thêm phòng mới
-                $stmt = $pdo->prepare("INSERT INTO rooms (number, building_id) VALUES (?, ?)");
-                $stmt->execute([$data[0], $buildingId]);
-                $roomId = $pdo->lastInsertId();
-            } else {
-                $roomId = $room['id'];
-            }
-            
-            // Kiểm tra và thêm/cập nhật đăng ký
-            if (!empty($data[2])) { // Nếu có MSSV
-                $stmt = $pdo->prepare("
-                    INSERT INTO registrations 
-                    (room_id, student_id, student_name, student_email, student_phone, 
-                     student_faculty, payment_status, registration_date)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE
-                    student_name = VALUES(student_name),
-                    student_email = VALUES(student_email),
-                    student_phone = VALUES(student_phone),
-                    student_faculty = VALUES(student_faculty),
-                    payment_status = VALUES(payment_status)
-                ");
+            try {
+                $rowNumber++;
                 
-                $stmt->execute([
-                    $roomId,
-                    $data[2], // MSSV
-                    $data[3], // Họ tên
-                    $data[4], // Email
-                    $data[5], // Số điện thoại
-                    $data[6], // Khoa
-                    $data[7], // Trạng thái thanh toán
-                    $data[8]  // Ngày đăng ký
-                ]);
+                // Kiểm tra dữ liệu đầu vào và hiển thị thông tin chi tiết hơn
+                if (count($data) < 8) {
+                    throw new Exception(
+                        "Dòng $rowNumber không đủ số cột yêu cầu. " .
+                        "Yêu cầu 8 cột, nhận được " . count($data) . " cột. " .
+                        "Dữ liệu: " . implode(', ', $data)
+                    );
+                }
+
+                // Kiểm tra xem tòa nhà đã tồn tại chưa
+                $stmt = $pdo->prepare("SELECT id FROM buildings WHERE name = ?");
+                $stmt->execute([$data[1]]);
+                $building = $stmt->fetch();
+                
+                if (!$building) {
+                    // Thêm tòa nhà mới
+                    $stmt = $pdo->prepare("INSERT INTO buildings (name) VALUES (?)");
+                    $stmt->execute([$data[1]]);
+                    $buildingId = $pdo->lastInsertId();
+                } else {
+                    $buildingId = $building['id'];
+                }
+                
+                // Kiểm tra và thêm/cập nhật phòng
+                $stmt = $pdo->prepare("SELECT id FROM rooms WHERE number = ? AND building_id = ?");
+                $stmt->execute([$data[0], $buildingId]);
+                $room = $stmt->fetch();
+                
+                if (!$room) {
+                    // Thêm phòng mới
+                    $stmt = $pdo->prepare("INSERT INTO rooms (number, building_id) VALUES (?, ?)");
+                    $stmt->execute([$data[0], $buildingId]);
+                    $roomId = $pdo->lastInsertId();
+                } else {
+                    $roomId = $room['id'];
+                }
+                
+                // Kiểm tra và thêm/cập nhật đăng ký
+                if (!empty($data[2])) { // Nếu có MSSV
+                    // Kiểm tra và xử lý ngày đăng ký
+                    $registrationDate = $data[7];
+                    if ($registrationDate == 'N/A' || empty($registrationDate)) {
+                        $registrationDate = date('Y-m-d');
+                    }
+
+                    $stmt = $pdo->prepare("
+                        INSERT INTO registrations 
+                        (room_id, student_id, student_name, student_email, student_phone, 
+                         student_faculty, registration_date)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ON DUPLICATE KEY UPDATE
+                        student_name = VALUES(student_name),
+                        student_email = VALUES(student_email),
+                        student_phone = VALUES(student_phone),
+                        student_faculty = VALUES(student_faculty)
+                    ");
+                    
+                    $stmt->execute([
+                        $roomId,
+                        $data[2],      // MSSV
+                        $data[3],      // Họ tên
+                        $data[4],      // Email
+                        $data[5],      // Số điện thoại
+                        $data[6],      // Khoa
+                        $registrationDate  // Ngày đăng ký
+                    ]);
+                }
+            } catch (Exception $e) {
+                throw new Exception("Lỗi tại dòng $rowNumber: " . $e->getMessage());
             }
         }
         
@@ -151,7 +169,7 @@ function importDataFromCSV($file) {
         fclose($handle);
         return array('success' => true, 'message' => 'Nhập dữ liệu thành công');
         
-    } catch(PDOException $e) {
+    } catch(Exception $e) {
         // Rollback nếu có lỗi
         $pdo->rollBack();
         fclose($handle);
@@ -190,6 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quản Lý Dữ Liệu KTX</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
     <style>
         body {
             background-color: #f8f9fa;
@@ -287,6 +306,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         document.getElementById('importForm').onsubmit = async function(e) {
             e.preventDefault();
@@ -300,14 +320,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 });
                 
                 const result = await response.json();
-                alert(result.message);
                 
                 if (result.success) {
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'Thành công!',
+                        text: result.message,
+                        confirmButtonText: 'Đóng'
+                    });
                     location.reload();
+                } else {
+                    await Swal.fire({
+                        icon: 'error',
+                        title: 'Lỗi!',
+                        text: result.message,
+                        confirmButtonText: 'Đóng'
+                    });
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('Có lỗi xảy ra khi nhập dữ liệu');
+                await Swal.fire({
+                    icon: 'error',
+                    title: 'Lỗi!',
+                    text: 'Có lỗi xảy ra khi xử lý dữ liệu. Vui lòng thử lại sau.',
+                    confirmButtonText: 'Đóng'
+                });
             }
         };
     </script>

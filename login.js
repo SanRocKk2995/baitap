@@ -53,7 +53,12 @@ document.querySelector('form').addEventListener('submit', function(e) {
     // Kiểm tra mật khẩu khớp nhau khi đăng ký
     if (formData.get('action') === 'register') {
         if (formData.get('password') !== formData.get('confirm_password')) {
-            alert('Mật khẩu xác nhận không khớp!');
+            swal({
+                title: "Thông báo!",
+                text: "Mật khẩu xác nhận không khớp!",
+                icon: "error",
+                button: "Ok",
+            });
             return;
         }
     }

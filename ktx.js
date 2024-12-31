@@ -175,7 +175,12 @@ async function submitRegistration(event) {
         const result = await response.json();
         if (result.success) {
             await fetchData();
-            alert('Đăng ký phòng thành công!');
+            swal({
+                title: "Thông báo!",
+                text: "Đăng kí phòng thành công!",
+                icon: "success",
+                button: "Ok",
+            });
             closeRegisterModal();
         }
     } catch (error) {
@@ -681,7 +686,12 @@ async function submitRegistration(event) {
         const result = await response.json();
         if (result.success) {
             await fetchData();
-            alert('Đăng ký phòng thành công!');
+            swal({
+                title: "Thông báo!",
+                text: "Đăng kí phòng thành công!",
+                icon: "success",
+                button: "Ok",
+            });
             closeRegisterModal();
         }
     } catch (error) {
@@ -832,7 +842,12 @@ function closePaymentSearch() {
 async function searchStudentPayment() {
     const studentId = document.getElementById('paymentStudentId').value;
     if (!studentId) {
-        alert('Vui lòng nhập MSSV');
+        swal({
+            title: "Thông báo!",
+            text: "Vui lòng nhập MSSV",
+            icon: "warning",
+            button: "Ok",
+        });
         return;
     }
 
@@ -884,7 +899,34 @@ function getCurrentSemester() {
 }
 //hàm thanh toán tiền phòng
 async function makePayment(registrationId, amount) {
-    if (!confirm('Xác nhận thanh toán tiền phòng?')) return;
+    const willPay = await swal({
+        title: "Xác nhận",
+        text: "Bạn có chắc muốn thanh toán tiền phòng?",
+        icon: "warning",
+        buttons: {
+            cancel: {
+                text: "Hủy",
+                value: false,
+                visible: true,
+                className: "",
+                closeModal: true,
+            },
+            confirm: {
+                text: "Đồng ý",
+                value: true,
+            }
+        },
+        dangerMode: true,
+        didOpen: () => {
+            const cancelButton = document.querySelector('.swal-button--cancel');
+            if (cancelButton) {
+                cancelButton.style.position = 'relative';
+                cancelButton.style.right = '235px';
+            }
+        }
+    });
+    
+    if (!willPay) return;
 
     try {
         const response = await fetch('api.php?action=makePayment', {
@@ -899,14 +941,29 @@ async function makePayment(registrationId, amount) {
 
         const result = await response.json();
         if (result.success) {
-            alert('Thanh toán thành công!');
-            searchStudentPayment(); // Refresh payment info
+            swal({
+                title: "Thông báo!",
+                text: "Thanh toán thành công!",
+                icon: "success",
+                button: "Ok",
+            });
+            searchStudentPayment();
         } else {
-            alert('Có lỗi xảy ra: ' + result.error);
+            swal({
+                title: "Lỗi!",
+                text: "Có lỗi xảy ra: " + result.error,
+                icon: "error",
+                button: "Ok",
+            });
         }
     } catch (error) {
         console.error('Error making payment:', error);
-        alert('Có lỗi xảy ra khi thanh toán');
+        swal({
+            title: "Lỗi!",
+            text: "Có lỗi xảy ra khi thanh toán",
+            icon: "error",
+            button: "Ok",
+        });
     }
 }
 
