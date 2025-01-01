@@ -1488,7 +1488,6 @@ button:disabled:hover {
 }
 .swal-button--cancel {
   position: relative;
-  right: 235px;
 }
 
 .swal-footer {
