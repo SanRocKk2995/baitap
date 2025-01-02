@@ -72,9 +72,12 @@ document.querySelector('form').addEventListener('submit', function(e) {
         if (data.success) {
             alert(data.message);
             if (formData.get('action') === 'login') {
-                window.location.href = 'ktx.html';
+                if (data.role === 'admin') {
+                    window.location.href = 'ktx.html';
+                } else {
+                    window.location.href = 'user.html';
+                }
             } else {
-                // Nếu đăng ký thành công, chuyển về form đăng nhập
                 toggleForm();
             }
         } else {

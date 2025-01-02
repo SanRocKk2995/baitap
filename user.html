@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="vn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trang Sinh Viên</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="user.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <div class="sidebar" id="sidebar">
+        <button class="close-sidebar" onclick="toggleSidebar()">
+            <i class="fas fa-times"></i>
+        </button>
+        <div class="sidebar-content">
+            <button onclick="showDashboard()"><i class="fas fa-home"></i> Trang Chủ</button>
+            <button onclick="showRoomRegistration()"><i class="fas fa-bed"></i> Đăng Ký Phòng</button>
+            <button onclick="showPaymentHistory()"><i class="fas fa-history"></i> Lịch Sử Thanh Toán</button>
+            <button onclick="showProfile()"><i class="fas fa-user"></i> Thông Tin Cá Nhân</button>
+            <button onclick="logout()"><i class="fas fa-sign-out-alt"></i> Đăng Xuất</button>
+        </div>
+    </div>
+
+    <div class="header">
+        <button class="hamburger-menu" onclick="toggleSidebar()">
+            <div class="hamburger-icon">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </button>
+        <h1>Hệ Thống Quản Lý KTX</h1>
+    </div>
+
+    <div class="container">
+        <div id="mainContent">
+            <!-- Nội dung sẽ được load động -->
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="user.js"></script>
+</body>
+</html>
