@@ -21,6 +21,19 @@ body {
     width: 100%;
     top: 0;
     z-index: 100;
+    gap: 1rem;
+}
+
+/* Style cho nút trong header */
+.header .btn {
+    padding: 0.5rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.header .btn i {
+    font-size: 1.1em;
 }
 
 /* Sidebar styles */
@@ -264,15 +277,47 @@ body {
 /* Error message */
 .error-message {
     text-align: center;
-    padding: 20px;
+    padding: 40px 20px;
     background: #fff3f3;
     border-radius: 10px;
-    color: #d32f2f;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    margin: 20px auto;
+    max-width: 600px;
 }
 
 .error-message i {
     font-size: 3em;
-    margin-bottom: 10px;
+    color: #d32f2f;
+    margin-bottom: 20px;
+}
+
+.error-message p {
+    margin: 10px 0;
+    color: #d32f2f;
+}
+
+.retry-btn {
+    margin-top: 20px;
+    padding: 10px 20px;
+    background: #4e54c8;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.3s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.retry-btn:hover {
+    background: #3f44a3;
+}
+
+.retry-btn i {
+    font-size: 1em;
+    color: white;
+    margin: 0;
 }
 
 /* Form styles */
@@ -427,4 +472,316 @@ body {
 
 .cancel-registration-btn i {
     font-size: 14px;
+}
+
+/* Payment history styles */
+.payment-history {
+    padding: 20px;
+}
+
+.payment-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.payment-item {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.payment-info {
+    display: grid;
+    gap: 10px;
+}
+
+.payment-status {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.payment-status.completed {
+    background: #4CAF50;
+    color: white;
+}
+
+.payment-status.pending {
+    background: #FFC107;
+    color: black;
+}
+
+.payment-status.overdue {
+    background: #F44336;
+    color: white;
+}
+
+/* Payment form styles */
+.payment-form {
+    text-align: left;
+    margin: 20px 0;
+}
+
+.payment-form p {
+    margin-bottom: 15px;
+    font-size: 1.1em;
+}
+
+.payment-form .form-group {
+    margin-bottom: 15px;
+}
+
+.payment-form label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.payment-form select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+/* Payment button styles */
+.payment-btn {
+    flex: 1;
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.payment-btn:hover {
+    background: #218838;
+}
+
+.payment-btn i {
+    font-size: 14px;
+}
+
+.view-history-btn {
+    width: 100%;
+    padding: 8px;
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    margin-top: 15px;
+}
+
+.view-history-btn:hover {
+    background: #5a6268;
+}
+
+/* Utility card styles */
+.utility-info-card {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.utility-info-card .info-content {
+    margin: 15px 0;
+}
+
+.utility-info-card .info-content p {
+    margin: 8px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.utility-actions {
+    margin-top: 15px;
+}
+
+.payment-details {
+    text-align: left;
+    padding: 10px;
+}
+
+.payment-details p {
+    margin: 8px 0;
+    display: flex;
+    justify-content: space-between;
+}
+
+.utility-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.utility-item span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.utility-item i {
+    width: 20px;
+    color: #4e54c8;
+}
+
+.utility-item div {
+    text-align: right;
+}
+
+.utility-item .fee {
+    color: #e74c3c;
+    font-weight: bold;
+}
+
+.utility-total {
+    display: flex;
+    justify-content: space-between;
+    padding: 15px 0;
+    margin-top: 10px;
+    border-top: 2px solid #eee;
+    font-size: 1.1em;
+}
+
+.utility-actions {
+    margin-top: 20px;
+}
+
+.payment-history {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.payment-history table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.payment-history th {
+    background: #f8f9fa;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.payment-history td, .payment-history th {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.badge {
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-weight: normal;
+}
+
+.bg-info {
+    background-color: #17a2b8;
+    color: white;
+}
+
+.bg-primary {
+    background-color: #007bff;
+    color: white;
+}
+
+.bg-success {
+    background-color: #28a745;
+    color: white;
+}
+
+.payment-history-modal {
+    max-width: 800px !important;
+}
+
+.payment-history td i {
+    margin-right: 5px;
+}
+
+/* Thêm style cho dashboard header */
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.dashboard-header button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+}
+
+/* Cập nhật style cho payment history modal */
+.payment-history-modal {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
+.payment-history-popup {
+    margin: 0 !important;
+    position: relative !important;
+}
+
+.payment-history {
+    max-height: 60vh;
+    overflow-y: auto;
+    margin: -1rem;
+}
+
+.payment-history table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+}
+
+.payment-history th {
+    background: #f8f9fa;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 15px;
+}
+
+.payment-history td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+/* Thêm animation cho modal */
+.swal2-popup {
+    animation: modalShow 0.3s ease-out;
+}
+
+@keyframes modalShow {
+    from {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
 }

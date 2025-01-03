@@ -50,7 +50,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($user && password_verify($password, $user['password'])) {
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['username'] = $user['username'];
-                echo json_encode(['success' => true, 'message' => 'Đăng nhập thành công']);
+                echo json_encode([
+                    'success' => true, 
+                    'message' => 'Đăng nhập thành công',
+                    'role' => $user['role']
+                ]);
             } else {
                 echo json_encode(['success' => false, 'message' => 'Tên đăng nhập hoặc mật khẩu không đúng']);
             }

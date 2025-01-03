@@ -10,28 +10,11 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
-    <div class="sidebar" id="sidebar">
-        <button class="close-sidebar" onclick="toggleSidebar()">
-            <i class="fas fa-times"></i>
-        </button>
-        <div class="sidebar-content">
-            <button onclick="showDashboard()"><i class="fas fa-home"></i> Trang Chủ</button>
-            <button onclick="showRoomRegistration()"><i class="fas fa-bed"></i> Đăng Ký Phòng</button>
-            <button onclick="showPaymentHistory()"><i class="fas fa-history"></i> Lịch Sử Thanh Toán</button>
-            <button onclick="showProfile()"><i class="fas fa-user"></i> Thông Tin Cá Nhân</button>
-            <button onclick="logout()"><i class="fas fa-sign-out-alt"></i> Đăng Xuất</button>
-        </div>
-    </div>
-
     <div class="header">
-        <button class="hamburger-menu" onclick="toggleSidebar()">
-            <div class="hamburger-icon">
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
-        </button>
         <h1>Hệ Thống Quản Lý KTX</h1>
+        <button onclick="showPersonalInfo()" class="btn btn-light ms-auto">
+            <i class="fas fa-user-edit"></i> Điền thông tin cá nhân
+        </button>
     </div>
 
     <div class="container">

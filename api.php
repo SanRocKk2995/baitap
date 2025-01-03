@@ -247,17 +247,23 @@ switch($action) {
     case 'searchStudent':
         $studentId = $_GET['studentId'];
         $sql = "SELECT r.*, rm.number as room_number, rm.price as room_price,
-                b.name as building_name, p.status as payment_status,
-                p.semester as payment_semester, p.payment_date
+                b.name as building_name, r.payment_status,
+                DATE_FORMAT(r.last_payment_date, '%d/%m/%Y') as formatted_payment_date
                 FROM registrations r 
                 JOIN rooms rm ON r.room_id = rm.id 
                 JOIN buildings b ON rm.building_id = b.id
-                LEFT JOIN payments p ON r.id = p.registration_id
                 WHERE r.student_id = ?";
         
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$studentId]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($result) {
+            // Định dạng lại dữ liệu trả về
+            $result['payment_status'] = $result['payment_status'] ?? 'unpaid';
+            $result['last_payment_date'] = $result['formatted_payment_date'] ?? null;
+        }
+        
         echo json_encode($result);
         break;
     //hàm thanh toán tiền phòng
@@ -266,11 +272,34 @@ switch($action) {
         try {
             $pdo->beginTransaction();
             
-            $stmt = $pdo->prepare("INSERT INTO payments (registration_id, amount, semester, status) 
-                                  VALUES (?, ?, ?, 'completed')");
+            // Cập nhật trạng thái thanh toán
+            $stmt = $pdo->prepare("
+                UPDATE registrations 
+                SET payment_status = 'paid',
+                    last_payment_date = NOW()
+                WHERE id = ?
+            ");
+            $stmt->execute([$data['registrationId']]);
+            
+            // Thêm bản ghi thanh toán mới
+            $stmt = $pdo->prepare("
+                INSERT INTO payments (
+                    registration_id, 
+                    amount, 
+                    electricity_fee,
+                    water_fee,
+                    internet_fee,
+                    semester, 
+                    status
+                ) 
+                VALUES (?, ?, ?, ?, ?, ?, 'completed')
+            ");
             $stmt->execute([
                 $data['registrationId'],
                 $data['amount'],
+                $data['electricityFee'],
+                $data['waterFee'],
+                $data['internetFee'],
                 $data['semester']
             ]);
             
@@ -280,24 +309,6 @@ switch($action) {
             $pdo->rollBack();
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         }
-        break;
-    //hàm lấy danh sách sinh viên chưa thanh toán
-    case 'getUnpaidStudents':
-        $currentSemester = $_GET['semester'];
-        $sql = "SELECT r.*, rm.number as room_number, rm.price as room_price,
-                b.name as building_name
-                FROM registrations r 
-                JOIN rooms rm ON r.room_id = rm.id 
-                JOIN buildings b ON rm.building_id = b.id
-                LEFT JOIN payments p ON r.id = p.registration_id 
-                    AND p.semester = ?
-                WHERE p.id IS NULL
-                ORDER BY b.name, rm.number";
-        
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([$currentSemester]);
-        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        echo json_encode($result);
         break;
     case 'logout':
         session_start();
@@ -328,6 +339,200 @@ switch($action) {
             echo json_encode(['success' => true]);
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        break;
+    case 'getUnpaidStudents':
+        $sql = "SELECT r.*, rm.number as room_number, b.name as building_name,
+                rm.price as room_price,
+                DATE_FORMAT(r.registration_date, '%d/%m/%Y') as formatted_reg_date
+                FROM registrations r 
+                JOIN rooms rm ON r.room_id = rm.id 
+                JOIN buildings b ON rm.building_id = b.id
+                WHERE r.payment_status = 'unpaid'
+                ORDER BY r.registration_date DESC";
+        
+        $stmt = $pdo->query($sql);
+        $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Định dạng lại giá phòng
+        foreach ($students as &$student) {
+            $student['room_price'] = number_format($student['room_price'], 0, ',', '.') . ' VNĐ';
+        }
+        
+        echo json_encode($students);
+        break;
+    case 'getPaidStudents':
+        $sql = "SELECT r.*, rm.number as room_number, b.name as building_name,
+                DATE_FORMAT(r.registration_date, '%d/%m/%Y') as formatted_reg_date,
+                DATE_FORMAT(r.last_payment_date, '%d/%m/%Y') as formatted_payment_date,
+                p.amount as payment_amount, p.semester
+                FROM registrations r 
+                JOIN rooms rm ON r.room_id = rm.id 
+                JOIN buildings b ON rm.building_id = b.id
+                LEFT JOIN payments p ON r.id = p.registration_id
+                WHERE r.payment_status = 'paid'
+                ORDER BY r.last_payment_date DESC";
+        
+        $stmt = $pdo->query($sql);
+        $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Định dạng lại dữ liệu để hiển thị
+        foreach ($students as &$student) {
+            $student['payment_amount'] = number_format($student['payment_amount'], 0, ',', '.') . ' VNĐ';
+            // Thêm thông tin học kỳ nếu có
+            if ($student['semester']) {
+                $student['payment_info'] = "Đã đóng {$student['payment_amount']} cho {$student['semester']}";
+            } else {
+                $student['payment_info'] = "Đã đóng {$student['payment_amount']}";
+            }
+        }
+        
+        echo json_encode($students);
+        break;
+    case 'getUtilityPrices':
+        try {
+            $stmt = $pdo->query("SELECT * FROM utility_prices ORDER BY id DESC LIMIT 1");
+            $prices = $stmt->fetch(PDO::FETCH_ASSOC);
+            echo json_encode([
+                'success' => true,
+                'prices' => $prices
+            ]);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+        break;
+    case 'updateUtilityPrices':
+        $data = json_decode(file_get_contents('php://input'), true);
+        try {
+            $stmt = $pdo->prepare("
+                INSERT INTO utility_prices (electricity_price, water_price, internet_price)
+                VALUES (?, ?, ?)
+            ");
+            $stmt->execute([
+                $data['electricity'],
+                $data['water'],
+                $data['internet']
+            ]);
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+        break;
+    case 'getPaymentHistory':
+        try {
+            $sql = "
+                SELECT 
+                    r.student_name,
+                    r.student_id,
+                    rm.number as room_number,
+                    b.name as building_name,
+                    p.amount,
+                    p.electricity_fee,
+                    p.water_fee,
+                    p.internet_fee,
+                    p.payment_date,
+                    p.semester
+                FROM payments p
+                JOIN registrations r ON p.registration_id = r.id
+                JOIN rooms rm ON r.room_id = rm.id
+                JOIN buildings b ON rm.building_id = b.id
+                ORDER BY p.payment_date DESC
+            ";
+            $stmt = $pdo->query($sql);
+            $payments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            echo json_encode([
+                'success' => true,
+                'payments' => $payments
+            ]);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+        break;
+    case 'getUtilityUsage':
+        $roomId = $_GET['roomId'];
+        $month = $_GET['month'];
+        $year = $_GET['year'];
+        
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM utility_usage 
+                WHERE room_id = ? AND month = ? AND year = ?
+            ");
+            $stmt->execute([$roomId, $month, $year]);
+            $usage = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            echo json_encode([
+                'success' => true,
+                'usage' => $usage
+            ]);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+        break;
+    case 'getUtilityHistory':
+        $roomId = $_GET['roomId'];
+        
+        try {
+            $stmt = $pdo->prepare("
+                SELECT * FROM utility_usage 
+                WHERE room_id = ?
+                ORDER BY year DESC, month DESC 
+                LIMIT 12
+            ");
+            $stmt->execute([$roomId]);
+            $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            echo json_encode([
+                'success' => true,
+                'history' => $history
+            ]);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+        break;
+    case 'updateUtilityUsage':
+        $data = json_decode(file_get_contents('php://input'), true);
+        
+        try {
+            $stmt = $pdo->prepare("
+                INSERT INTO utility_usage 
+                    (room_id, month, year, electricity_usage, water_usage)
+                VALUES (?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    electricity_usage = VALUES(electricity_usage),
+                    water_usage = VALUES(water_usage)
+            ");
+            
+            $stmt->execute([
+                $data['roomId'],
+                $data['month'],
+                $data['year'],
+                $data['electricityUsage'],
+                $data['waterUsage']
+            ]);
+            
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
         }
         break;
 }

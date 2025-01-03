@@ -55,46 +55,81 @@ function renderRoomsByBuilding(buildings, rooms) {
         
         roomGrid.appendChild(buildingSection);
     });
-}//tạo card hiển thị thông tin phòng
+}
+
+// Hàm tạo room card
 function createRoomCard(room) {
-    const canRegister = room.status === 'available' && room.current_occupants < room.max_occupants;
-    
+    const statusText = getStatusText(room.status);
     return `
-        <div class="room-card" data-room-id="${room.id}">
-            <span class="room-status ${room.status}" data-status="${room.status}">
-                ${getStatusText(room.status)}
-            </span>
-            <h3 class="room-number" onclick="showStudentList(${room.id})" style="cursor: pointer;">
-                Phòng ${room.number}
-            </h3>
-            <p>Số người: ${room.current_occupants}/${room.max_occupants}</p>
-            <p>Giá: ${formatPrice(room.price)}đ/học kỳ</p>
-            <button onclick="openRegisterModal(${room.id})" 
-                ${!canRegister ? 'disabled' : ''}>
-                Đăng ký
-            </button>
-            <button class="edit-status-btn" onclick="openEditStatus(${room.id})">
-                Sửa trạng thái
-            </button>
+        <div class="room-card">
+            <div class="room-info" onclick="toggleRoomActions('actions-${room.id}')">
+                <span class="room-status ${room.status}">${statusText}</span>
+                <h3>Phòng ${room.number}</h3>
+                <p>Số người: ${room.current_occupants}/${room.max_occupants}</p>
+                <p>Giá: ${formatPrice(room.price)}đ/học kỳ</p>
+            </div>
+            <div class="room-actions" id="actions-${room.id}">
+                ${room.status !== 'occupied' ? 
+                    `<button onclick="openRegisterModal(${room.id})">
+                        <i class="fas fa-user-plus"></i> Đăng ký
+                    </button>` : ''
+                }
+                <button onclick="openEditStatus(${room.id})">
+                    <i class="fas fa-edit"></i> Sửa trạng thái
+                </button>
+                <button onclick="openUtilityUsage(${room.id}, '${room.number}')">
+                    <i class="fas fa-bolt"></i> Điện nước
+                </button>
+                <button onclick="showStudentList(${room.id})">
+                    <i class="fas fa-users"></i> Danh sách sinh viên
+                </button>
+            </div>
         </div>
     `;
 }
-//hàm lấy text hiển thị trạng thái phòng
-function getStatusText(status) {
-    const statusMap = {
-        'available': 'Còn trống',
-        'occupied': 'Đã đủ người',
-        'maintenance': 'Đang bảo trì',
-        'repairs': 'Đang sửa chữa',
-        'cleaning': 'Đang dọn dẹp',
-        'damaged': 'Hỏng đồ đạc'
-    };
-    return statusMap[status] || status;
+
+// Hàm hiển thị phòng
+function displayRooms(rooms) {
+    const grid = document.getElementById('roomGrid');
+    if (!grid) return;
+
+    grid.innerHTML = rooms.map(room => createRoomCard(room)).join('');
 }
+
+// Hàm toggle actions
+function toggleRoomActions(actionId) {
+    const allActions = document.querySelectorAll('.room-actions');
+    allActions.forEach(div => {
+        if (div.id !== actionId) {
+            div.style.display = 'none';
+        }
+    });
+    
+    const actionDiv = document.getElementById(actionId);
+    if (actionDiv) {
+        actionDiv.style.display = actionDiv.style.display === 'none' ? 'flex' : 'none';
+    }
+}
+
+// Hàm lấy text trạng thái
+function getStatusText(status) {
+    switch(status) {
+        case 'available':
+            return 'Còn trống';
+        case 'occupied':
+            return 'Đủ người';
+        case 'issues':
+            return 'Có sự cố';
+        default:
+            return status;
+    }
+}
+
 //hàm format giá tiền
 function formatPrice(price) {
     return new Intl.NumberFormat('vi-VN').format(price);
 }
+
 //hàm thêm phòng mới
 async function addRoom(event) {
     event.preventDefault();
@@ -125,6 +160,7 @@ async function addRoom(event) {
         console.error('Error adding room:', error);
     }
 }
+
 //hàm thêm tòa nhà mới
 async function addBuilding(event) {
     event.preventDefault();
@@ -150,6 +186,7 @@ async function addBuilding(event) {
         console.error('Error adding building:', error);
     }
 }
+
 //hàm đăng ký phòng cho sinh viên
 async function submitRegistration(event) {
     event.preventDefault();
@@ -187,6 +224,7 @@ async function submitRegistration(event) {
         console.error('Error submitting registration:', error);
     }
 }
+
 //hàm cập nhật trạng thái phòng
 async function updateRoomStatus(event) {
     event.preventDefault();
@@ -214,6 +252,7 @@ async function updateRoomStatus(event) {
         console.error('Error updating room status:', error);
     }
 }
+
 //hàm modal control
 function openAddRoom() {
     document.getElementById('addRoomModal').style.display = 'block';
@@ -255,6 +294,7 @@ function openEditStatus(roomId) {
 function closeEditStatus() {
     document.getElementById('editStatusModal').style.display = 'none';
 }
+
 //hàm hiển thị danh sách sinh viên trong phòng
 async function showStudentList(roomId) {
     try {
@@ -285,6 +325,7 @@ async function showStudentList(roomId) {
         alert('Có lỗi xảy ra khi lấy danh sách sinh viên');
     }
 }
+
 //hàm đóng modal danh sách sinh viên
 function closeStudentList() {
     document.getElementById('studentListModal').style.display = 'none';
@@ -298,6 +339,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     fetchData();
 });
+
 //hàm tìm kiếm phòng
 async function searchRooms() {
     const searchText = document.getElementById('searchInput').value.toLowerCase().trim();
@@ -431,7 +473,7 @@ async function filterRooms(filter) {
                     return room.status === 'occupied' || room.current_occupants >= room.max_occupants;
                 } else if (filter === 'issues') {
                     // Lọc các phòng có vấn đề
-                    return ['maintenance', 'repairs', 'cleaning', 'damaged'].includes(room.status);
+                    return ['bao_tri', 'sua_chua', 'don_dep', 'hu_hong'].includes(room.status);
                 }
                 return true;
             });
@@ -871,20 +913,47 @@ async function searchStudentPayment() {
                 <p><strong>Họ và tên:</strong> ${data.student_name}</p>
                 <p><strong>MSSV:</strong> ${data.student_id}</p>
                 <p><strong>Phòng:</strong> ${data.room_number} - Tòa ${data.building_name}</p>
-                <p><strong>Giá phòng:</strong> ${formatPrice(data.room_price)}đ/học kỳ</p>
-                <p><strong>Trạng thái:</strong> 
-                    <span class="payment-status ${isPaid ? 'paid' : 'unpaid'}">
-                        ${isPaid ? 'Đã thanh toán' : 'Chưa thanh toán'}
-                    </span>
-                </p>
-                ${!isPaid ? `
-                    <button onclick="makePayment(${data.id}, ${data.room_price})">
-                        Thanh toán học kỳ ${currentSemester}
-                    </button>
-                ` : ''}
+                <div class="fees-section">
+                    <h4>Phí phòng</h4>
+                    <p><strong>Giá phòng:</strong> ${formatPrice(data.room_price)}đ/học kỳ</p>
+                    
+                    <h4>Phí sinh hoạt</h4>
+                    <div class="utility-fees">
+                        <div class="form-group">
+                            <label>Tiền điện:</label>
+                            <input type="number" id="electricityFee" min="0" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Tiền nước:</label>
+                            <input type="number" id="waterFee" min="0" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Tiền mạng:</label>
+                            <input type="number" id="internetFee" min="0" value="0">
+                        </div>
+                    </div>
+                    
+                    <p><strong>Tổng phí:</strong> <span id="totalFee">${formatPrice(data.room_price)}đ</span></p>
+                    
+                    <p><strong>Trạng thái:</strong> 
+                        <span class="payment-status ${isPaid ? 'paid' : 'unpaid'}">
+                            ${isPaid ? 'Đã thanh toán' : 'Chưa thanh toán'}
+                        </span>
+                    </p>
+                    ${!isPaid ? `
+                        <button onclick="makePayment(${data.id}, ${data.room_price})">
+                            Thanh toán học kỳ ${currentSemester}
+                        </button>
+                    ` : ''}
+                </div>
             </div>
         `;
-        paymentInfo.style.display = 'block';
+
+        // Thêm event listeners cho các input phí
+        const feeInputs = ['electricityFee', 'waterFee', 'internetFee'];
+        feeInputs.forEach(id => {
+            document.getElementById(id).addEventListener('input', updateTotalFee);
+        });
     } catch (error) {
         console.error('Error searching student:', error);
         alert('Có lỗi xảy ra khi tìm kiếm');
@@ -898,10 +967,16 @@ function getCurrentSemester() {
     return month >= 8 ? `${year}-1` : `${year}-2`;
 }
 //hàm thanh toán tiền phòng
-async function makePayment(registrationId, amount) {
+async function makePayment(registrationId, roomPrice) {
+    const electricityFee = Number(document.getElementById('electricityFee').value) || 0;
+    const waterFee = Number(document.getElementById('waterFee').value) || 0;
+    const internetFee = Number(document.getElementById('internetFee').value) || 0;
+    
+    const totalAmount = roomPrice + electricityFee + waterFee + internetFee;
+
     const willPay = await swal({
         title: "Xác nhận",
-        text: "Bạn có chắc muốn thanh toán tiền phòng?",
+        text: `Tổng số tiền cần thanh toán: ${formatPrice(totalAmount)}đ`,
         icon: "warning",
         buttons: {
             cancel: {
@@ -916,14 +991,7 @@ async function makePayment(registrationId, amount) {
                 value: true,
             }
         },
-        dangerMode: true,
-        didOpen: () => {
-            const cancelButton = document.querySelector('.swal-button--cancel');
-            if (cancelButton) {
-                cancelButton.style.position = 'relative';
-                cancelButton.style.right = '235px';
-            }
-        }
+        dangerMode: true
     });
     
     if (!willPay) return;
@@ -934,7 +1002,10 @@ async function makePayment(registrationId, amount) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 registrationId: registrationId,
-                amount: amount,
+                amount: totalAmount,
+                electricityFee: electricityFee,
+                waterFee: waterFee,
+                internetFee: internetFee,
                 semester: getCurrentSemester()
             })
         });
@@ -968,53 +1039,6 @@ async function makePayment(registrationId, amount) {
 }
 
 // Thêm hàm hiển thị sinh viên chưa đóng tiền
-async function showUnpaidStudents() {
-    try {
-        const currentSemester = getCurrentSemester();
-        const response = await fetch(`api.php?action=getUnpaidStudents&semester=${currentSemester}`);
-        const students = await response.json();
-        
-        const container = document.getElementById('unpaidStudentsList');
-        
-        if (students.length === 0) {
-            container.innerHTML = '<div class="no-results">Không có sinh viên nào chưa đóng tiền</div>';
-        } else {
-            // Nhóm sinh viên theo tòa nhà
-            const groupedStudents = {};
-            students.forEach(student => {
-                if (!groupedStudents[student.building_name]) {
-                    groupedStudents[student.building_name] = [];
-                }
-                groupedStudents[student.building_name].push(student);
-            });
-            
-            // Hiển thị danh sách theo nhóm
-            container.innerHTML = Object.entries(groupedStudents).map(([building, students]) => `
-                <div class="building-group">
-                    <h3>Tòa ${building}</h3>
-                    ${students.map(student => `
-                        <div class="unpaid-student-item">
-                            <div class="student-info">
-                                <p><strong>Họ và tên:</strong> ${student.student_name}</p>
-                                <p><strong>MSSV:</strong> ${student.student_id}</p>
-                                <p><strong>Phòng:</strong> ${student.room_number}</p>
-                                <p><strong>Số tiền:</strong> ${formatPrice(student.room_price)}đ</p>
-                            </div>
-                            <button onclick="makePayment(${student.id}, ${student.room_price})">
-                                Thanh toán
-                            </button>
-                        </div>
-                    `).join('')}
-                </div>
-            `).join('');
-        }
-        
-        document.getElementById('unpaidStudentsModal').style.display = 'block';
-    } catch (error) {
-        console.error('Error fetching unpaid students:', error);
-        alert('Có lỗi xảy ra khi lấy danh sách sinh viên chưa đóng tiền');
-    }
-}
 
 // Thêm hàm đóng modal danh sách sinh viên chưa đóng tiền
 function closeUnpaidStudents() {
@@ -1102,3 +1126,317 @@ document.addEventListener('DOMContentLoaded', function() {
     
 
 });
+
+async function showUnpaidStudents() {
+    try {
+        const response = await fetch('api.php?action=getUnpaidStudents');
+        const students = await response.json();
+        
+        const roomGrid = document.getElementById('roomGrid');
+        const registrationsList = document.getElementById('registrationsList');
+        
+        roomGrid.style.display = 'none';
+        registrationsList.style.display = 'block';
+        
+        const registrationsContainer = document.getElementById('registrationsContainer');
+        
+        if (students.length === 0) {
+            registrationsContainer.innerHTML = '<div class="no-registrations">Không có sinh viên nào chưa đóng tiền</div>';
+            return;
+        }
+        
+        function getDaysOverdue(registrationDate) {
+            const regDate = new Date(registrationDate);
+            const now = new Date();
+            const diffTime = Math.abs(now - regDate);
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        }
+        
+        registrationsContainer.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h3>Danh sách sinh viên chưa đóng tiền (${students.length} sinh viên)</h3>
+                <div class="btn-group">
+                </div>
+            </div>
+            ${students.map(student => `
+                <div class="registration-item unpaid">
+                    <div class="student-info">
+                        <h3>Phòng ${student.room_number} - Tòa ${student.building_name}</h3>
+                        <p><strong>Họ tên:</strong> ${student.student_name}</p>
+                        <p><strong>MSSV:</strong> ${student.student_id}</p>
+                        <p><strong>SĐT:</strong> ${student.student_phone}</p>
+                        <p><strong>Email:</strong> ${student.student_email}</p>
+                        <p><strong>Khoa:</strong> ${student.student_faculty}</p>
+                        <p><strong>Ngày đăng ký:</strong> ${student.formatted_reg_date}</p>
+                        <p class="text-danger"><strong>Số ngày chưa đóng:</strong> ${getDaysOverdue(student.registration_date)} ngày</p>
+                    </div>
+                    <div class="registration-actions">
+                        <button onclick="openPaymentSearch()" class="btn btn-primary">
+                            <i class="fas fa-money-bill-wave"></i> Thanh toán
+                        </button>
+                    </div>
+                </div>
+            `).join('')}
+        `;
+        
+    } catch (error) {
+        console.error('Error fetching unpaid students:', error);
+        alert('Có lỗi xảy ra khi lấy danh sách sinh viên chưa đóng tiền');
+    }
+}
+
+async function showPaidStudents() {
+    try {
+        const response = await fetch('api.php?action=getPaidStudents');
+        const students = await response.json();
+        
+        const roomGrid = document.getElementById('roomGrid');
+        const registrationsList = document.getElementById('registrationsList');
+        
+        roomGrid.style.display = 'none';
+        registrationsList.style.display = 'block';
+        
+        const registrationsContainer = document.getElementById('registrationsContainer');
+        
+        if (students.length === 0) {
+            registrationsContainer.innerHTML = '<div class="no-registrations">Không có sinh viên nào đã đóng tiền</div>';
+            return;
+        }
+
+        registrationsContainer.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h3>Danh sách sinh viên đã đóng tiền (${students.length} sinh viên)</h3>
+                <div class="btn-group">
+                </div>
+            </div>
+            ${students.map(student => `
+                <div class="registration-item paid">
+                    <div class="student-info">
+                        <h3>Phòng ${student.room_number} - Tòa ${student.building_name}</h3>
+                        <p><strong>Họ tên:</strong> ${student.student_name}</p>
+                        <p><strong>MSSV:</strong> ${student.student_id}</p>
+                        <p><strong>SĐT:</strong> ${student.student_phone}</p>
+                        <p><strong>Email:</strong> ${student.student_email}</p>
+                        <p><strong>Khoa:</strong> ${student.student_faculty}</p>
+                        <p><strong>Ngày đăng ký:</strong> ${student.formatted_reg_date}</p>
+                        <p class="text-success"><strong>Ngày đóng tiền:</strong> ${student.formatted_payment_date}</p>
+                    </div>
+                </div>
+            `).join('')}
+        `;
+        
+    } catch (error) {
+        console.error('Error fetching paid students:', error);
+        alert('Có lỗi xảy ra khi lấy danh sách sinh viên đã đóng tiền');
+    }
+}
+
+// Hàm tính tổng phí
+function updateTotalFee() {
+    const roomPrice = Number(document.querySelector('.student-payment-info').dataset.roomPrice);
+    const electricityFee = Number(document.getElementById('electricityFee').value) || 0;
+    const waterFee = Number(document.getElementById('waterFee').value) || 0;
+    const internetFee = Number(document.getElementById('internetFee').value) || 0;
+    
+    const total = roomPrice + electricityFee + waterFee + internetFee;
+    document.getElementById('totalFee').textContent = formatPrice(total) + 'đ';
+}
+
+// Mở modal quản lý giá dịch vụ
+async function openUtilityPrices() {
+    try {
+        const response = await fetch('api.php?action=getUtilityPrices');
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('electricityPrice').value = data.prices.electricity_price;
+            document.getElementById('waterPrice').value = data.prices.water_price;
+            document.getElementById('internetPrice').value = data.prices.internet_price;
+        }
+        
+        document.getElementById('utilityPricesModal').style.display = 'block';
+    } catch (error) {
+        console.error('Error:', error);
+        swal("Lỗi", "Không thể tải thông tin giá dịch vụ", "error");
+    }
+}
+
+// Đóng modal
+function closeUtilityPrices() {
+    document.getElementById('utilityPricesModal').style.display = 'none';
+}
+
+// Cập nhật giá dịch vụ
+async function updateUtilityPrices(event) {
+    event.preventDefault();
+    
+    const prices = {
+        electricity: Number(document.getElementById('electricityPrice').value),
+        water: Number(document.getElementById('waterPrice').value),
+        internet: Number(document.getElementById('internetPrice').value)
+    };
+
+    try {
+        const response = await fetch('api.php?action=updateUtilityPrices', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(prices)
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+            swal("Thành công", "Đã cập nhật giá dịch vụ", "success");
+            closeUtilityPrices();
+        } else {
+            swal("Lỗi", data.error || "Không thể cập nhật giá dịch vụ", "error");
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        swal("Lỗi", "Không thể cập nhật giá dịch vụ", "error");
+    }
+}
+
+// Mở modal nhập số điện nước
+async function openUtilityUsage(roomId, roomNumber) {
+    document.getElementById('utilityRoomId').value = roomId;
+    document.getElementById('utilityRoomNumber').textContent = roomNumber;
+    
+    // Điền năm
+    const yearSelect = document.getElementById('utilityYear');
+    const currentYear = new Date().getFullYear();
+    yearSelect.innerHTML = '';
+    for (let year = currentYear - 1; year <= currentYear + 1; year++) {
+        yearSelect.innerHTML += `<option value="${year}">${year}</option>`;
+    }
+    yearSelect.value = currentYear;
+    
+    // Set tháng hiện tại
+    document.getElementById('utilityMonth').value = new Date().getMonth() + 1;
+    
+    // Load dữ liệu hiện tại nếu có
+    await loadUtilityUsage(roomId);
+    
+    // Hiển thị modal
+    document.getElementById('utilityUsageModal').style.display = 'block';
+}
+
+// Load dữ liệu sử dụng điện nước
+async function loadUtilityUsage(roomId) {
+    try {
+        const month = document.getElementById('utilityMonth').value;
+        const year = document.getElementById('utilityYear').value;
+        
+        const response = await fetch(`api.php?action=getUtilityUsage&roomId=${roomId}&month=${month}&year=${year}`);
+        const data = await response.json();
+        
+        if (data.success && data.usage) {
+            document.getElementById('electricityUsage').value = data.usage.electricity_usage;
+            document.getElementById('waterUsage').value = data.usage.water_usage;
+        } else {
+            document.getElementById('electricityUsage').value = '';
+            document.getElementById('waterUsage').value = '';
+        }
+        
+        // Load lịch sử
+        await loadUtilityHistory(roomId);
+        
+    } catch (error) {
+        console.error('Error:', error);
+        swal("Lỗi", "Không thể tải dữ liệu", "error");
+    }
+}
+
+// Load lịch sử sử dụng
+async function loadUtilityHistory(roomId) {
+    try {
+        const response = await fetch(`api.php?action=getUtilityHistory&roomId=${roomId}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const historyContent = document.getElementById('utilityHistoryContent');
+            if (data.history.length === 0) {
+                historyContent.innerHTML = '<p class="no-data">Chưa có dữ liệu</p>';
+                return;
+            }
+            
+            historyContent.innerHTML = data.history.map(item => `
+                <div class="history-item">
+                    <div class="history-date">Tháng ${item.month}/${item.year}</div>
+                    <div class="history-usage">
+                        <span>Điện: ${item.electricity_usage} kWh</span>
+                        <span>Nước: ${item.water_usage} m³</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+// Cập nhật số điện nước
+async function updateUtilityUsage(event) {
+    event.preventDefault();
+    
+    const data = {
+        roomId: document.getElementById('utilityRoomId').value,
+        month: document.getElementById('utilityMonth').value,
+        year: document.getElementById('utilityYear').value,
+        electricityUsage: document.getElementById('electricityUsage').value,
+        waterUsage: document.getElementById('waterUsage').value
+    };
+
+    try {
+        const response = await fetch('api.php?action=updateUtilityUsage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+            swal("Thành công", "Đã cập nhật số điện nước", "success");
+            await loadUtilityHistory(data.roomId);
+        } else {
+            swal("Lỗi", result.error || "Không thể cập nhật số điện nước", "error");
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        swal("Lỗi", "Không thể cập nhật số điện nước", "error");
+    }
+}
+
+// Đóng modal
+function closeUtilityUsage() {
+    document.getElementById('utilityUsageModal').style.display = 'none';
+}
+
+// Event listeners cho thay đổi tháng/năm
+document.getElementById('utilityMonth').addEventListener('change', () => {
+    const roomId = document.getElementById('utilityRoomId').value;
+    loadUtilityUsage(roomId);
+});
+
+document.getElementById('utilityYear').addEventListener('change', () => {
+    const roomId = document.getElementById('utilityRoomId').value;
+    loadUtilityUsage(roomId);
+});
+
+// Thêm hàm để toggle hiển thị các nút
+function toggleRoomActions(actionId) {
+    // Ẩn tất cả các action divs trước
+    const allActions = document.querySelectorAll('.room-actions');
+    allActions.forEach(div => {
+        if (div.id !== actionId) {
+            div.style.display = 'none';
+        }
+    });
+    
+    // Toggle action div được chọn
+    const actionDiv = document.getElementById(actionId);
+    if (actionDiv) {
+        actionDiv.style.display = actionDiv.style.display === 'none' ? 'flex' : 'none';
+    }
+}

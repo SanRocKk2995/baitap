@@ -48,11 +48,33 @@ async function showDashboard() {
     const mainContent = document.getElementById('mainContent');
     try {
         const response = await fetch('user_api.php?action=getDashboardInfo');
+        
+        // Kiểm tra response status
+        if (!response.ok) {
+            if (response.status === 401) {
+                // Session hết hạn
+                window.location.href = 'index.php';
+                return;
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        // Kiểm tra response type
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Invalid response format');
+        }
+
         const data = await response.json();
         
         if (!data.success) {
-            throw new Error(data.message);
+            throw new Error(data.message || 'Unknown error occurred');
         }
+
+        // Kiểm tra trạng thái thanh toán tiền phòng tháng này
+        const currentDate = new Date();
+        const currentMonth = `${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`;
+        const needNewPayment = !data.payment || data.payment.payment_month !== currentMonth;
 
         mainContent.innerHTML = `
             <div class="dashboard">
@@ -64,12 +86,18 @@ async function showDashboard() {
                             <div class="info-content">
                                 <p><strong>Phòng:</strong> ${data.room.number}</p>
                                 <p><strong>Tòa:</strong> ${data.room.building}</p>
-                                <p><strong>Giá phòng:</strong> ${formatPrice(data.room.price)}đ/học kỳ</p>
+                                <p><strong>Giá phòng:</strong> ${formatPrice(data.room.price)}đ/tháng</p>
                             </div>
                             <div class="room-actions">
-                                <button class="view-details-btn" onclick="showRoomDetails('${data.room.id}')">
-                                    Xem chi tiết
-                                </button>
+                                ${needNewPayment ? `
+                                    <button class="payment-btn" onclick="makePayment('${data.room.id}', ${data.room.price})">
+                                        <i class="fas fa-money-bill"></i> Thanh toán tiền phòng tháng ${currentDate.getMonth() + 1}
+                                    </button>
+                                ` : `
+                                    <button class="payment-btn" disabled style="background-color: #ccc;">
+                                        <i class="fas fa-check"></i> Đã thanh toán tháng này
+                                    </button>
+                                `}
                                 <button class="cancel-registration-btn" onclick="cancelRegistration()">
                                     <i class="fas fa-times"></i> Hủy đăng ký
                                 </button>
@@ -83,7 +111,7 @@ async function showDashboard() {
                     </div>
                     
                     <div class="card payment-info-card">
-                        <h3><i class="fas fa-money-bill-wave"></i> Thanh Toán</h3>
+                        <h3><i class="fas fa-money-bill"></i> Thông Tin Thanh Toán</h3>
                         ${data.payment ? `
                             <div class="info-content">
                                 <p><strong>Trạng thái:</strong> 
@@ -91,15 +119,70 @@ async function showDashboard() {
                                         ${getPaymentStatusText(data.payment.status)}
                                     </span>
                                 </p>
-                                <p><strong>Học kỳ:</strong> ${data.payment.semester}</p>
+                                <p><strong>Tháng:</strong> ${data.payment.payment_month || 'Chưa có thông tin'}</p>
                                 <p><strong>Số tiền:</strong> ${formatPrice(data.payment.amount)}đ</p>
                             </div>
+                            <button class="view-history-btn" onclick="showPaymentHistory()">
+                                <i class="fas fa-history"></i> Xem lịch sử
+                            </button>
                         ` : `
                             <div class="empty-state">
                                 <p>Chưa có thông tin thanh toán</p>
-                                ${data.room ? `
-                                    <button onclick="showPaymentInfo()">Xem thông tin thanh toán</button>
-                                ` : ''}
+                            </div>
+                        `}
+                    </div>
+                    
+                    <div class="card utility-info-card">
+                        <h3><i class="fas fa-bolt"></i> Tiện ích Tháng ${data.utilities?.month || '--'}/${data.utilities?.year || '--'}</h3>
+                        ${data.utilities ? `
+                            <div class="info-content">
+                                <div class="utility-item">
+                                    <span><i class="fas fa-bolt"></i> Điện:</span>
+                                    <div>
+                                        <p>${data.utilities.electricity_usage} kWh</p>
+                                        <p class="fee">${formatPrice(data.utilities.electricity_fee)}đ</p>
+                                    </div>
+                                </div>
+                                <div class="utility-item">
+                                    <span><i class="fas fa-water"></i> Nước:</span>
+                                    <div>
+                                        <p>${data.utilities.water_usage} m³</p>
+                                        <p class="fee">${formatPrice(data.utilities.water_fee)}đ</p>
+                                    </div>
+                                </div>
+                                <div class="utility-item">
+                                    <span><i class="fas fa-wifi"></i> Internet:</span>
+                                    <div>
+                                        <p class="fee">${formatPrice(data.utilities.internet_fee)}đ</p>
+                                    </div>
+                                </div>
+                                <div class="utility-total">
+                                    <strong>Tổng cộng:</strong>
+                                    <strong>${formatPrice(
+                                        data.utilities.electricity_fee + 
+                                        data.utilities.water_fee + 
+                                        data.utilities.internet_fee
+                                    )}đ</strong>
+                                </div>
+                            </div>
+                            <div class="utility-actions">
+                                ${data.utilities.status === 'paid' ? `
+                                    <button class="payment-btn" disabled style="background-color: #ccc;">
+                                        <i class="fas fa-check"></i> Đã thanh toán
+                                    </button>
+                                ` : `
+                                    <button class="payment-btn" onclick="makeUtilityPayment(
+                                        ${data.utilities.electricity_fee},
+                                        ${data.utilities.water_fee},
+                                        ${data.utilities.internet_fee}
+                                    )">
+                                        <i class="fas fa-money-bill"></i> Thanh toán tiện ích
+                                    </button>
+                                `}
+                            </div>
+                        ` : `
+                            <div class="empty-state">
+                                <p>Chưa có thông tin tiện ích tháng này</p>
                             </div>
                         `}
                     </div>
@@ -107,14 +190,26 @@ async function showDashboard() {
             </div>
         `;
     } catch (error) {
-        console.error('Error loading dashboard:', error);
+        console.error('Dashboard error:', error);
+        
+        // Hiển thị thông báo lỗi chi tiết hơn
         mainContent.innerHTML = `
             <div class="error-message">
                 <i class="fas fa-exclamation-circle"></i>
                 <p>Có lỗi xảy ra khi tải thông tin</p>
                 <p>${error.message}</p>
+                <button onclick="location.reload()" class="retry-btn">
+                    <i class="fas fa-sync"></i> Thử lại
+                </button>
             </div>
         `;
+
+        // Nếu là lỗi session, chuyển hướng về trang đăng nhập
+        if (error.message.includes('đăng nhập')) {
+            setTimeout(() => {
+                window.location.href = 'index.php';
+            }, 2000);
+        }
     }
 }
 
@@ -167,7 +262,7 @@ async function showRoomRegistration() {
                                     <h4>Phòng ${room.number}</h4>
                                     <div class="room-info">
                                         <p><i class="fas fa-users"></i> Số người: ${room.current_occupants}/${room.max_occupants}</p>
-                                        <p><i class="fas fa-money-bill"></i> Giá: ${formatPrice(room.price)}đ/học kỳ</p>
+                                        <p><i class="fas fa-money-bill"></i> Giá: ${formatPrice(room.price)}đ/tháng</p>
                                     </div>
                                     <button type="button" 
                                             onclick="confirmRegistration('${room.id}', '${room.number}', ${room.price})"
@@ -200,72 +295,14 @@ async function showRoomRegistration() {
 
 // Hàm xác nhận đăng ký phòng
 async function confirmRegistration(roomId, roomNumber, price) {
-    // Kiểm tra xem đã có thông tin người dùng chưa
-    if (!currentUser) {
-        Swal.fire({
-            icon: 'error',
-            title: 'Lỗi',
-            text: 'Vui lòng đăng nhập lại để tiếp tục'
-        }).then(() => {
-            window.location.href = 'index.php';
-        });
-        return;
-    }
-
     try {
-        // Bước 1: Form nhập thông tin
-        const { value: formData } = await Swal.fire({
-            title: 'Thông tin đăng ký',
-            html: `
-                <div class="registration-info">
-                    <p><strong>Mã sinh viên:</strong> ${currentUser.username}</p>
-                    <p><strong>Email:</strong> ${currentUser.email}</p>
-                </div>
-                <form id="registrationForm">
-                    <div class="form-group">
-                        <label for="phone">Số điện thoại:</label>
-                        <input type="tel" id="phone" class="swal2-input" placeholder="Nhập số điện thoại">
-                    </div>
-                    <div class="form-group">
-                        <label for="faculty">Khoa:</label>
-                        <input type="text" id="faculty" class="swal2-input" placeholder="Nhập tên khoa">
-                    </div>
-                </form>
-            `,
-            focusConfirm: false,
-            showCancelButton: true,
-            confirmButtonText: 'Tiếp tục',
-            cancelButtonText: 'Hủy',
-            preConfirm: () => {
-                const phone = document.getElementById('phone').value;
-                const faculty = document.getElementById('faculty').value;
-                
-                if (!phone || !faculty) {
-                    Swal.showValidationMessage('Vui lòng điền đầy đủ thông tin');
-                    return false;
-                }
-                
-                if (!/^[0-9]{10}$/.test(phone)) {
-                    Swal.showValidationMessage('Số điện thoại không hợp lệ');
-                    return false;
-                }
-
-                return { phone, faculty };
-            }
-        });
-
-        if (!formData) return; // Người dùng đã hủy
-
-        // Bước 2: Xác nhận thông tin
+        // Xác nhận đăng ký
         const result = await Swal.fire({
             title: 'Xác nhận đăng ký',
             html: `
                 <div class="confirmation-details">
                     <p><strong>Phòng:</strong> ${roomNumber}</p>
-                    <p><strong>Giá phòng:</strong> ${formatPrice(price)}đ/học kỳ</p>
-                    <p><strong>Mã sinh viên:</strong> ${currentUser.username}</p>
-                    <p><strong>Số điện thoại:</strong> ${formData.phone}</p>
-                    <p><strong>Khoa:</strong> ${formData.faculty}</p>
+                    <p><strong>Giá phòng:</strong> ${formatPrice(price)}đ/tháng</p>
                 </div>
             `,
             icon: 'question',
@@ -276,16 +313,14 @@ async function confirmRegistration(roomId, roomNumber, price) {
 
         if (!result.isConfirmed) return;
 
-        // Bước 3: Gửi đăng ký
+        // Gửi đăng ký
         const response = await fetch('user_api.php?action=registerRoom', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                roomId: roomId,
-                phone: formData.phone,
-                faculty: formData.faculty
+                roomId: roomId
             })
         });
 
@@ -388,6 +423,289 @@ async function cancelRegistration() {
             icon: 'error',
             title: 'Lỗi',
             text: error.message || 'Có lỗi xảy ra khi hủy đăng ký'
+        });
+    }
+}
+
+// Hàm hiển thị lịch sử thanh toán
+async function showPaymentHistory() {
+    try {
+        const response = await fetch('user_api.php?action=getPaymentHistory');
+        const data = await response.json();
+
+        if (data.success) {
+            const paymentRows = data.payments.map(payment => `
+                <tr>
+                    <td>${new Date(payment.payment_date).toLocaleDateString('vi-VN')}</td>
+                    <td>
+                        ${payment.payment_type === 'utility' 
+                            ? '<span class="badge bg-info">Tiện ích</span>' 
+                            : '<span class="badge bg-primary">Tiền phòng</span>'
+                        }
+                    </td>
+                    <td>${formatPrice(payment.amount)}đ</td>
+                    <td>
+                        ${payment.payment_type === 'utility' 
+                            ? `Thanh toán tiện ích tháng ${new Date(payment.payment_date).getMonth() + 1}/${new Date(payment.payment_date).getFullYear()}`
+                            : `Thanh toán tiền phòng tháng ${payment.month || ''}`
+                        }
+                    </td>
+                    <td>
+                        <span class="badge bg-success">
+                            <i class="fas fa-check"></i> Đã thanh toán
+                        </span>
+                    </td>
+                </tr>
+            `).join('');
+
+            Swal.fire({
+                title: 'Lịch sử thanh toán',
+                html: `
+                    <div class="payment-history">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Ngày</th>
+                                    <th>Loại</th>
+                                    <th>Số tiền</th>
+                                    <th>Mô tả</th>
+                                    <th>Trạng thái</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${paymentRows}
+                            </tbody>
+                        </table>
+                    </div>
+                `,
+                width: '800px',
+                customClass: {
+                    container: 'payment-history-modal'
+                }
+            });
+        } else {
+            throw new Error(data.message);
+        }
+    } catch (error) {
+        console.error('Error loading payment history:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Lỗi',
+            text: 'Không thể tải lịch sử thanh toán'
+        });
+    }
+}
+
+// Thêm hàm thanh toán
+async function makePayment(registrationId, amount) {
+    try {
+        // Kiểm tra trạng thái thanh toán hiện tại
+        const response = await fetch('user_api.php?action=checkPaymentStatus');
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.message);
+        }
+
+        if (!data.canPay) {
+            await Swal.fire({
+                icon: 'warning',
+                title: 'Thông báo',
+                text: 'Bạn đã thanh toán cho tháng này rồi!'
+            });
+            return;
+        }
+
+        // Tiếp tục với quá trình thanh toán
+        const result = await Swal.fire({
+            title: 'Xác nhận thanh toán',
+            html: `
+                <div class="payment-details">
+                    <p>Số tiền cần thanh toán: ${formatPrice(amount)}đ</p>
+                </div>
+            `,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Xác nhận thanh toán',
+            cancelButtonText: 'Hủy'
+        });
+
+        if (result.isConfirmed) {
+            const response = await fetch('user_api.php?action=makePayment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                await Swal.fire({
+                    icon: 'success',
+                    title: 'Thành công',
+                    text: 'Thanh toán thành công!'
+                });
+                showDashboard();
+            } else {
+                throw new Error(data.message);
+            }
+        }
+    } catch (error) {
+        console.error('Payment error:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Lỗi',
+            text: error.message || 'Có lỗi xảy ra khi thanh toán'
+        });
+    }
+}
+
+// Hàm hiển thị popup điền thông tin cá nhân
+async function showPersonalInfo() {
+    try {
+        // Lấy thông tin hiện tại của user (nếu có)
+        const response = await fetch('user_api.php?action=getUserInfo');
+        const data = await response.json();
+        const userInfo = data.success ? data.user : {};
+
+        const result = await Swal.fire({
+            title: 'Thông tin cá nhân',
+            html: `
+                <form id="personalInfoForm" class="swal-form">
+                    <div class="form-group">
+                        <label for="fullName">Họ và tên:</label>
+                        <input type="text" id="fullName" class="swal-input" 
+                            value="${userInfo.fullname || ''}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="studentId">Mã sinh viên:</label>
+                        <input type="text" id="studentId" class="swal-input" 
+                            value="${userInfo.username || ''}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email:</label>
+                        <input type="email" id="email" class="swal-input" 
+                            value="${userInfo.email || ''}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="phone">Số điện thoại:</label>
+                        <input type="tel" id="phone" class="swal-input" 
+                            value="${userInfo.phone || ''}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="faculty">Khoa:</label>
+                        <input type="text" id="faculty" class="swal-input" 
+                            value="${userInfo.faculty || ''}" required>
+                    </div>
+                </form>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Lưu thông tin',
+            cancelButtonText: 'Hủy',
+            preConfirm: () => {
+                const form = document.getElementById('personalInfoForm');
+                if (!form.checkValidity()) {
+                    form.reportValidity();
+                    return false;
+                }
+                return {
+                    fullname: document.getElementById('fullName').value,
+                    username: document.getElementById('studentId').value,
+                    email: document.getElementById('email').value,
+                    phone: document.getElementById('phone').value,
+                    faculty: document.getElementById('faculty').value
+                };
+            }
+        });
+
+        if (result.isConfirmed && result.value) {
+            // Gửi thông tin lên server
+            const saveResponse = await fetch('user_api.php?action=updateUserInfo', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(result.value)
+            });
+
+            const saveData = await saveResponse.json();
+
+            if (saveData.success) {
+                await Swal.fire({
+                    icon: 'success',
+                    title: 'Thành công',
+                    text: 'Đã cập nhật thông tin cá nhân'
+                });
+                // Cập nhật lại dashboard nếu cần
+                showDashboard();
+            } else {
+                throw new Error(saveData.message);
+            }
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Lỗi',
+            text: error.message || 'Có lỗi xảy ra khi cập nhật thông tin'
+        });
+    }
+}
+
+// Thêm hàm thanh toán tiện ích
+async function makeUtilityPayment(electricityFee, waterFee, internetFee) {
+    try {
+        const totalAmount = electricityFee + waterFee + internetFee;
+        
+        const result = await Swal.fire({
+            title: 'Xác nhận thanh toán tiện ích',
+            html: `
+                <div class="payment-details">
+                    <p><strong>Tiền điện:</strong> ${formatPrice(electricityFee)}đ</p>
+                    <p><strong>Tiền nước:</strong> ${formatPrice(waterFee)}đ</p>
+                    <p><strong>Tiền mạng:</strong> ${formatPrice(internetFee)}đ</p>
+                    <p><strong>Tổng cộng:</strong> ${formatPrice(totalAmount)}đ</p>
+                </div>
+            `,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Xác nhận thanh toán',
+            cancelButtonText: 'Hủy'
+        });
+
+        if (result.isConfirmed) {
+            const response = await fetch('user_api.php?action=makeUtilityPayment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    electricity_fee: electricityFee,
+                    water_fee: waterFee,
+                    internet_fee: internetFee
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                await Swal.fire({
+                    icon: 'success',
+                    title: 'Thành công',
+                    text: 'Thanh toán tiện ích thành công!'
+                });
+                showDashboard(); // Cập nhật lại dashboard
+            } else {
+                throw new Error(data.message);
+            }
+        }
+    } catch (error) {
+        console.error('Utility payment error:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Lỗi',
+            text: error.message || 'Có lỗi xảy ra khi thanh toán tiện ích'
         });
     }
 }

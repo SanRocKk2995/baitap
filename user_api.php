@@ -1,17 +1,43 @@
 <?php
 session_start();
+// Thêm headers để tránh cache và xác định response type
 header('Content-Type: application/json');
-require_once 'config.php';
+header('Cache-Control: no-cache, must-revalidate');
+header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
 
-// Kiểm tra đăng nhập
+// Thêm error handling
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+
+// Hàm xử lý lỗi chung
+function handleError($message, $code = 500) {
+    http_response_code($code);
+    echo json_encode([
+        'success' => false,
+        'message' => $message
+    ]);
+    exit;
+}
+
+// Kiểm tra session trước khi thực hiện bất kỳ action nào
 function checkLogin() {
     if (!isset($_SESSION['user_id'])) {
-        echo json_encode(['success' => false, 'message' => 'Chưa đăng nhập']);
-        exit;
+        handleError('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại', 401);
     }
 }
 
+try {
+    require_once 'config.php';
+} catch (Exception $e) {
+    handleError('Không thể kết nối đến cơ sở dữ liệu');
+}
+
 $action = $_GET['action'] ?? '';
+
+// Đảm bảo action được cung cấp
+if (empty($action)) {
+    handleError('Missing action parameter', 400);
+}
 
 switch($action) {
     case 'getUserInfo':
@@ -19,7 +45,7 @@ switch($action) {
         try {
             // Sử dụng database login_system
             $stmt = $pdo->prepare("
-                SELECT id, username, email 
+                SELECT id, username, email, fullname, phone, faculty 
                 FROM login_system.users 
                 WHERE id = ?
             ");
@@ -55,7 +81,7 @@ switch($action) {
                        b.name as building_name,
                        p.status as payment_status,
                        p.amount as payment_amount,
-                       p.semester as payment_semester
+                       p.payment_month
                 FROM login_system.users u
                 LEFT JOIN ktx_management.registrations r ON u.username COLLATE utf8mb4_unicode_ci = r.student_id
                 LEFT JOIN ktx_management.rooms rm ON r.room_id = rm.id
@@ -94,14 +120,86 @@ switch($action) {
                 $response['payment'] = [
                     'status' => $info['payment_status'],
                     'amount' => $info['payment_amount'],
-                    'semester' => $info['payment_semester']
+                    'payment_month' => $info['payment_month']
                 ];
             }
 
-            echo json_encode($response);
-        } catch (Exception $e) {
+            // Thêm thông tin tiện ích
+            if ($info['registration_id']) {
+                $stmt = $pdo->prepare("
+                    SELECT 
+                        u.month,
+                        u.year,
+                        COALESCE(u.electricity_usage, 0) as electricity_usage,
+                        COALESCE(u.water_usage, 0) as water_usage,
+                        -- Tính toán phí
+                        COALESCE(u.electricity_usage * 3500, 0) as calc_electricity_fee,
+                        COALESCE(u.water_usage * 15000, 0) as calc_water_fee,
+                        50000 as calc_internet_fee,
+                        CASE 
+                            WHEN p.id IS NOT NULL AND p.payment_type = 'utility' THEN 'paid'
+                            ELSE 'unpaid' 
+                        END as status
+                    FROM registrations r
+                    JOIN rooms rm ON r.room_id = rm.id
+                    LEFT JOIN utility_usage u ON rm.id = u.room_id
+                        AND u.month = MONTH(CURRENT_DATE())
+                        AND u.year = YEAR(CURRENT_DATE())
+                    LEFT JOIN payments p ON r.id = p.registration_id
+                        AND p.payment_type = 'utility'
+                        AND MONTH(p.payment_date) = MONTH(CURRENT_DATE())
+                        AND YEAR(p.payment_date) = YEAR(CURRENT_DATE())
+                    WHERE r.id = ?
+                ");
+                $stmt->execute([$info['registration_id']]);
+                $utilities = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($utilities) {
+                    $response['utilities'] = [
+                        'month' => $utilities['month'],
+                        'year' => $utilities['year'],
+                        'electricity_usage' => (float)$utilities['electricity_usage'],
+                        'water_usage' => (float)$utilities['water_usage'],
+                        'electricity_fee' => (float)$utilities['calc_electricity_fee'],
+                        'water_fee' => (float)$utilities['calc_water_fee'],
+                        'internet_fee' => (float)$utilities['calc_internet_fee'],
+                        'status' => $utilities['status']
+                    ];
+                }
+            }
+
+            // Lấy thông tin thanh toán gần nhất
+            $stmt = $pdo->prepare("
+                SELECT * FROM payments 
+                WHERE registration_id = ? 
+                ORDER BY payment_date DESC 
+                LIMIT 1
+            ");
+            $stmt->execute([$info['registration_id']]);
+            $payment = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            // Debug: In ra thông tin payment
+            error_log("Payment data: " . print_r($payment, true));
+            error_log("Current month: " . date('n/Y'));
+
+            // Đảm bảo trả về payment_date đúng định dạng
+            if ($payment) {
+                $payment['payment_date'] = date('Y-m-d H:i:s', strtotime($payment['payment_date']));
+                // Debug: In ra payment_month
+                error_log("Payment month: " . $payment['payment_month']);
+            }
+
             echo json_encode([
-                'success' => false, 
+                'success' => true,
+                'user' => $info,
+                'room' => $response['room'],
+                'payment' => $response['payment'],
+                'utilities' => $response['utilities']
+            ]);
+        } catch (Exception $e) {
+            error_log("Error in getDashboardInfo: " . $e->getMessage());
+            echo json_encode([
+                'success' => false,
                 'message' => $e->getMessage()
             ]);
         }
@@ -145,7 +243,7 @@ switch($action) {
         checkLogin();
         $data = json_decode(file_get_contents('php://input'), true);
         
-        if (!isset($data['roomId']) || !isset($data['phone']) || !isset($data['faculty'])) {
+        if (!isset($data['roomId'])) {
             echo json_encode(['success' => false, 'message' => 'Thiếu thông tin đăng ký']);
             break;
         }
@@ -153,10 +251,19 @@ switch($action) {
         try {
             $pdo->beginTransaction();
 
-            // Lấy thông tin người dùng
-            $stmt = $pdo->prepare("SELECT * FROM login_system.users WHERE id = ?");
+            // Lấy thông tin người dùng đầy đủ
+            $stmt = $pdo->prepare("
+                SELECT id, username, email, fullname, phone, faculty 
+                FROM login_system.users 
+                WHERE id = ?
+            ");
             $stmt->execute([$_SESSION['user_id']]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            // Kiểm tra xem người dùng đã điền đủ thông tin chưa
+            if (empty($user['fullname']) || empty($user['phone']) || empty($user['faculty'])) {
+                throw new Exception('Vui lòng điền đầy đủ thông tin cá nhân trước khi đăng ký phòng');
+            }
 
             // Kiểm tra xem sinh viên đã đăng ký phòng chưa
             $stmt = $pdo->prepare("
@@ -180,7 +287,7 @@ switch($action) {
                 throw new Exception('Phòng không tồn tại hoặc đã đủ người');
             }
 
-            // Thêm đăng ký mới
+            // Thêm đăng ký mới với đầy đủ thông tin
             $stmt = $pdo->prepare("
                 INSERT INTO registrations (
                     room_id,
@@ -195,10 +302,10 @@ switch($action) {
             $stmt->execute([
                 $data['roomId'],
                 $user['username'],
-                $user['username'],
+                $user['fullname'],
                 $user['email'],
-                $data['phone'],
-                $data['faculty']
+                $user['phone'],
+                $user['faculty']
             ]);
 
             // Cập nhật số người trong phòng
@@ -241,7 +348,11 @@ switch($action) {
                 throw new Exception('Không tìm thấy thông tin đăng ký phòng');
             }
 
-            // Xóa đăng ký
+            // Xóa các thanh toán liên quan trước
+            $stmt = $pdo->prepare("DELETE FROM payments WHERE registration_id = ?");
+            $stmt->execute([$registration['id']]);
+
+            // Sau đó xóa đăng ký
             $stmt = $pdo->prepare("DELETE FROM registrations WHERE student_id = ?");
             $stmt->execute([$_SESSION['username']]);
 
@@ -252,6 +363,265 @@ switch($action) {
                 WHERE id = ?
             ");
             $stmt->execute([$registration['room_id']]);
+
+            $pdo->commit();
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        break;
+
+    case 'checkPaymentStatus':
+        checkLogin();
+        try {
+            // Lấy thông tin đăng ký phòng của sinh viên
+            $stmt = $pdo->prepare("
+                SELECT r.* FROM registrations r
+                WHERE r.student_id = ?
+            ");
+            $stmt->execute([$_SESSION['username']]);
+            $registration = $stmt->fetch();
+
+            if (!$registration) {
+                throw new Exception('Không tìm thấy thông tin đăng ký phòng');
+            }
+
+            // Kiểm tra thanh toán của tháng hiện tại
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) FROM payments 
+                WHERE registration_id = ? 
+                AND MONTH(payment_date) = MONTH(CURRENT_DATE())
+                AND YEAR(payment_date) = YEAR(CURRENT_DATE())
+            ");
+            $stmt->execute([$registration['id']]);
+            $hasPayment = $stmt->fetchColumn() > 0;
+
+            echo json_encode([
+                'success' => true,
+                'canPay' => !$hasPayment
+            ]);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+        break;
+
+    case 'makePayment':
+        checkLogin();
+        try {
+            $pdo->beginTransaction();
+
+            // Lấy thông tin đăng ký phòng của sinh viên
+            $stmt = $pdo->prepare("
+                SELECT r.*, rm.price 
+                FROM registrations r
+                JOIN rooms rm ON r.room_id = rm.id
+                WHERE r.student_id = ?
+            ");
+            $stmt->execute([$_SESSION['username']]);
+            $registration = $stmt->fetch();
+
+            if (!$registration) {
+                throw new Exception('Không tìm thấy thông tin đăng ký phòng');
+            }
+
+            // Kiểm tra lại một lần nữa trước khi thanh toán
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) FROM payments 
+                WHERE registration_id = ? 
+                AND MONTH(payment_date) = MONTH(CURRENT_DATE())
+                AND YEAR(payment_date) = YEAR(CURRENT_DATE())
+            ");
+            $stmt->execute([$registration['id']]);
+            if ($stmt->fetchColumn() > 0) {
+                throw new Exception('Bạn đã thanh toán cho tháng này rồi');
+            }
+
+            // Thêm thanh toán mới
+            $stmt = $pdo->prepare("
+                INSERT INTO payments (
+                    registration_id,
+                    amount,
+                    payment_month,
+                    status,
+                    payment_date
+                ) VALUES (?, ?, ?, 'completed', NOW())
+            ");
+            $stmt->execute([
+                $registration['id'],
+                $registration['price'],
+                date('n/Y')
+            ]);
+
+            $pdo->commit();
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+        break;
+
+    case 'getPaymentHistory':
+        checkLogin();
+        try {
+            $stmt = $pdo->prepare("
+                SELECT 
+                    p.*,
+                    r.student_id,
+                    rm.number as room_number,
+                    rm.price
+                FROM payments p
+                JOIN registrations r ON p.registration_id = r.id
+                JOIN rooms rm ON r.room_id = rm.id
+                WHERE r.student_id = ?
+                ORDER BY p.payment_date DESC
+            ");
+            $stmt->execute([$_SESSION['username']]);
+            $payments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            echo json_encode([
+                'success' => true, 
+                'payments' => array_map(function($payment) {
+                    return [
+                        'payment_date' => $payment['payment_date'],
+                        'amount' => $payment['amount'],
+                        'payment_type' => $payment['payment_type'],
+                        'status' => $payment['status'],
+                        'month' => $payment['month'],
+                        'room_number' => $payment['room_number']
+                    ];
+                }, $payments)
+            ]);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false, 
+                'message' => $e->getMessage()
+            ]);
+        }
+        break;
+
+    case 'getUnpaidStudents':
+        // API endpoint cho admin để lấy danh sách sinh viên chưa thanh toán
+        checkAdminLogin(); // Đảm bảo chỉ admin mới có thể truy cập
+        try {
+            $stmt = $pdo->prepare("
+                SELECT DISTINCT r.*, u.username, u.email, rm.number as room_number, 
+                       rm.price, b.name as building_name
+                FROM registrations r
+                JOIN login_system.users u ON r.student_id = u.username
+                JOIN rooms rm ON r.room_id = rm.id
+                JOIN buildings b ON rm.building_id = b.id
+                LEFT JOIN payments p ON r.id = p.registration_id
+                WHERE (p.id IS NULL OR p.status != 'completed')
+                    AND r.payment_status = 'unpaid'
+                ORDER BY r.registration_date DESC
+            ");
+            $stmt->execute();
+            $unpaidStudents = $stmt->fetchAll();
+
+            echo json_encode([
+                'success' => true, 
+                'students' => $unpaidStudents
+            ]);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false, 
+                'message' => $e->getMessage()
+            ]);
+        }
+        break;
+
+    case 'updateUserInfo':
+        checkLogin();
+        try {
+            $data = json_decode(file_get_contents('php://input'), true);
+            
+            // Validate dữ liệu
+            if (empty($data['username']) || empty($data['email'])) {
+                throw new Exception('Thiếu thông tin bắt buộc');
+            }
+
+            // Cập nhật thông tin trong database
+            $stmt = $pdo->prepare("
+                UPDATE login_system.users 
+                SET username = ?,
+                    email = ?,
+                    fullname = ?,
+                    phone = ?,
+                    faculty = ?
+                WHERE id = ?
+            ");
+            
+            $stmt->execute([
+                $data['username'],
+                $data['email'],
+                $data['fullname'],
+                $data['phone'],
+                $data['faculty'],
+                $_SESSION['user_id']
+            ]);
+
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false, 
+                'message' => $e->getMessage()
+            ]);
+        }
+        break;
+
+    case 'makeUtilityPayment':
+        checkLogin();
+        $data = json_decode(file_get_contents('php://input'), true);
+        
+        try {
+            $pdo->beginTransaction();
+
+            // Lấy thông tin đăng ký phòng của sinh viên
+            $stmt = $pdo->prepare("
+                SELECT r.* FROM registrations r
+                WHERE r.student_id = ?
+            ");
+            $stmt->execute([$_SESSION['username']]);
+            $registration = $stmt->fetch();
+
+            if (!$registration) {
+                throw new Exception('Không tìm thấy thông tin đăng ký phòng');
+            }
+
+            // Kiểm tra xem đã thanh toán tiện ích tháng này chưa
+            $stmt = $pdo->prepare("
+                SELECT id FROM payments 
+                WHERE registration_id = ? 
+                AND payment_type = 'utility'
+                AND MONTH(payment_date) = MONTH(CURRENT_DATE())
+                AND YEAR(payment_date) = YEAR(CURRENT_DATE())
+            ");
+            $stmt->execute([$registration['id']]);
+            if ($stmt->fetch()) {
+                throw new Exception('Tiện ích tháng này đã được thanh toán');
+            }
+
+            // Thêm thanh toán tiện ích mới
+            $stmt = $pdo->prepare("
+                INSERT INTO payments (
+                    registration_id,
+                    amount,
+                    status,
+                    payment_date,
+                    payment_type
+                ) VALUES (?, ?, 'completed', NOW(), 'utility')
+            ");
+            $stmt->execute([
+                $registration['id'],
+                $data['electricity_fee'] + $data['water_fee'] + $data['internet_fee']
+            ]);
 
             $pdo->commit();
             echo json_encode(['success' => true]);
