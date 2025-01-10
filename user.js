@@ -134,37 +134,47 @@ async function showDashboard() {
                         `}
                     </div>
                     
-                    <div class="card utility-info-card">
-                        <h3><i class="fas fa-bolt"></i> Tiện ích Tháng ${data.utilities?.month || '--'}/${data.utilities?.year || '--'}</h3>
-                        ${data.utilities ? `
+                    ${data.utilities ? `
+                        <div class="utility-info-card">
+                            <h3><i class="fas fa-bolt"></i> Tiện ích Tháng ${data.utilities.month}/${data.utilities.year}</h3>
                             <div class="info-content">
                                 <div class="utility-item">
                                     <span><i class="fas fa-bolt"></i> Điện:</span>
                                     <div>
                                         <p>${data.utilities.electricity_usage} kWh</p>
-                                        <p class="fee">${formatPrice(data.utilities.electricity_fee)}đ</p>
+                                        <p class="fee">${formatPrice(data.utilities.electricity_fee)}đ/người</p>
+                                        <small class="text-muted">
+                                            (${formatPrice(data.utilities.electricity_fee * data.utilities.current_occupants)}đ tổng, 
+                                            ${data.utilities.current_occupants} người)
+                                        </small>
                                     </div>
                                 </div>
                                 <div class="utility-item">
                                     <span><i class="fas fa-water"></i> Nước:</span>
                                     <div>
                                         <p>${data.utilities.water_usage} m³</p>
-                                        <p class="fee">${formatPrice(data.utilities.water_fee)}đ</p>
+                                        <p class="fee">${formatPrice(data.utilities.water_fee)}đ/người</p>
+                                        <small class="text-muted">
+                                            (${formatPrice(data.utilities.water_fee * data.utilities.current_occupants)}đ tổng, 
+                                            ${data.utilities.current_occupants} người)
+                                        </small>
                                     </div>
                                 </div>
                                 <div class="utility-item">
                                     <span><i class="fas fa-wifi"></i> Internet:</span>
                                     <div>
-                                        <p class="fee">${formatPrice(data.utilities.internet_fee)}đ</p>
+                                        <p class="fee">${formatPrice(data.utilities.internet_fee)}đ/người</p>
+                                        <small class="text-muted">
+                                            (${formatPrice(data.utilities.internet_fee * data.utilities.current_occupants)}đ tổng, 
+                                            ${data.utilities.current_occupants} người)
+                                        </small>
                                     </div>
                                 </div>
                                 <div class="utility-total">
-                                    <strong>Tổng cộng:</strong>
-                                    <strong>${formatPrice(
-                                        data.utilities.electricity_fee + 
-                                        data.utilities.water_fee + 
-                                        data.utilities.internet_fee
-                                    )}đ</strong>
+                                    <strong>Tổng cộng mỗi người:</strong>
+                                    <strong>${formatPrice(data.utilities.electricity_fee + 
+                                                    data.utilities.water_fee + 
+                                                    data.utilities.internet_fee)}đ</strong>
                                 </div>
                             </div>
                             <div class="utility-actions">
@@ -182,12 +192,12 @@ async function showDashboard() {
                                     </button>
                                 `}
                             </div>
-                        ` : `
-                            <div class="empty-state">
-                                <p>Chưa có thông tin tiện ích tháng này</p>
-                            </div>
-                        `}
-                    </div>
+                        </div>
+                    ` : `
+                        <div class="empty-state">
+                            <p>Chưa có thông tin tiện ích tháng này</p>
+                        </div>
+                    `}
                 </div>
             </div>
         `;
@@ -719,16 +729,65 @@ async function showPersonalInfo() {
 // Thêm hàm thanh toán tiện ích
 async function makeUtilityPayment(electricityFee, waterFee, internetFee) {
     try {
-        const totalAmount = electricityFee + waterFee + internetFee;
-        
+        // Kiểm tra các tháng chưa thanh toán
+        const response = await fetch('user_api.php?action=checkUnpaidUtilities');
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.message || 'Không thể kiểm tra trạng thái thanh toán');
+        }
+
+        // Nếu không có tháng nào cần thanh toán
+        if (!data.unpaidMonths || data.unpaidMonths.length === 0) {
+            await Swal.fire({
+                icon: 'info',
+                title: 'Thông báo',
+                text: 'Bạn đã thanh toán đầy đủ tiện ích'
+            });
+            return;
+        }
+
+        // Sắp xếp các tháng chưa thanh toán theo thứ tự thời gian
+        const sortedMonths = data.unpaidMonths.sort((a, b) => {
+            const dateA = new Date(a.year, a.month - 1);
+            const dateB = new Date(b.year, b.month - 1);
+            return dateA - dateB;
+        });
+
+        const earliestUnpaid = sortedMonths[0];
+        const utilityDetails = data.utilityDetails[`${earliestUnpaid.month}-${earliestUnpaid.year}`];
+
+        if (!utilityDetails) {
+            throw new Error('Không tìm thấy thông tin tiện ích cho tháng này');
+        }
+
+        // Hiển thị dialog xác nhận với thông tin chi tiết
         const result = await Swal.fire({
             title: 'Xác nhận thanh toán tiện ích',
             html: `
                 <div class="payment-details">
-                    <p><strong>Tiền điện:</strong> ${formatPrice(electricityFee)}đ</p>
-                    <p><strong>Tiền nước:</strong> ${formatPrice(waterFee)}đ</p>
-                    <p><strong>Tiền mạng:</strong> ${formatPrice(internetFee)}đ</p>
-                    <p><strong>Tổng cộng:</strong> ${formatPrice(totalAmount)}đ</p>
+                    <h4>Chi tiết thanh toán tháng ${earliestUnpaid.month}/${earliestUnpaid.year}</h4>
+                    <div class="fee-breakdown">
+                        <p><strong>Tiền điện:</strong> ${formatPrice(utilityDetails.electricity_fee)}đ</p>
+                        <p><small>Sử dụng: ${utilityDetails.electricity_usage} kWh</small></p>
+                        
+                        <p><strong>Tiền nước:</strong> ${formatPrice(utilityDetails.water_fee)}đ</p>
+                        <p><small>Sử dụng: ${utilityDetails.water_usage} m³</small></p>
+                        
+                        <p><strong>Tiền mạng:</strong> ${formatPrice(utilityDetails.internet_fee)}đ</p>
+                        <hr>
+                        <p class="total"><strong>Tổng cộng:</strong> ${formatPrice(
+                            utilityDetails.electricity_fee + 
+                            utilityDetails.water_fee + 
+                            utilityDetails.internet_fee
+                        )}đ</p>
+                        ${sortedMonths.length > 1 ? `
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                Bạn còn ${sortedMonths.length - 1} tháng chưa thanh toán
+                            </div>
+                        ` : ''}
+                    </div>
                 </div>
             `,
             icon: 'question',
@@ -737,37 +796,62 @@ async function makeUtilityPayment(electricityFee, waterFee, internetFee) {
             cancelButtonText: 'Hủy'
         });
 
-        if (result.isConfirmed) {
-            const response = await fetch('user_api.php?action=makeUtilityPayment', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    electricity_fee: electricityFee,
-                    water_fee: waterFee,
-                    internet_fee: internetFee
-                })
+        if (!result.isConfirmed) return;
+
+        // Thực hiện thanh toán
+        const paymentResponse = await fetch('user_api.php?action=makeUtilityPayment', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                month: earliestUnpaid.month,
+                year: earliestUnpaid.year,
+                electricity_fee: utilityDetails.electricity_fee,
+                water_fee: utilityDetails.water_fee,
+                internet_fee: utilityDetails.internet_fee,
+                electricity_usage: utilityDetails.electricity_usage,
+                water_usage: utilityDetails.water_usage
+            })
+        });
+
+        const paymentData = await paymentResponse.json();
+
+        if (paymentData.success) {
+            await Swal.fire({
+                icon: 'success',
+                title: 'Thành công',
+                text: `Thanh toán tiện ích tháng ${earliestUnpaid.month}/${earliestUnpaid.year} thành công!`,
+                timer: 2000
             });
-
-            const data = await response.json();
-
-            if (data.success) {
-                await Swal.fire({
-                    icon: 'success',
-                    title: 'Thành công',
-                    text: 'Thanh toán tiện ích thành công!'
+            
+            // Nếu còn tháng chưa thanh toán, hỏi người dùng có muốn thanh toán tiếp không
+            if (sortedMonths.length > 1) {
+                const continueResult = await Swal.fire({
+                    icon: 'question',
+                    title: 'Thanh toán tháng tiếp theo?',
+                    text: `Bạn còn ${sortedMonths.length - 1} tháng chưa thanh toán. Bạn có muốn thanh toán tiếp không?`,
+                    showCancelButton: true,
+                    confirmButtonText: 'Có',
+                    cancelButtonText: 'Để sau'
                 });
-                showDashboard(); // Cập nhật lại dashboard
-            } else {
-                throw new Error(data.message);
+
+                if (continueResult.isConfirmed) {
+                    // Gọi lại hàm để thanh toán tháng tiếp theo
+                    await makeUtilityPayment(electricityFee, waterFee, internetFee);
+                    return;
+                }
             }
+
+            await showDashboard();
+        } else {
+            throw new Error(paymentData.message || 'Có lỗi xảy ra khi thanh toán');
         }
     } catch (error) {
         console.error('Utility payment error:', error);
-        Swal.fire({
+        await Swal.fire({
             icon: 'error',
-            title: 'Lỗi',
+            title: 'Lỗi thanh toán',
             text: error.message || 'Có lỗi xảy ra khi thanh toán tiện ích'
         });
     }

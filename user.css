@@ -785,3 +785,28 @@ body {
         opacity: 1;
     }
 }
+
+.text-muted {
+    color: #6c757d;
+    font-size: 0.85em;
+}
+
+.utility-item div {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.utility-item small {
+    margin-top: 2px;
+}
+
+.utility-total {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 2px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1.1em;
+}

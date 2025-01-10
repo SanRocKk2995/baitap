@@ -74,7 +74,7 @@ switch($action) {
     case 'getDashboardInfo':
         checkLogin();
         try {
-            // Chuyển đổi student_id sang COLLATE giống nhau
+            // Thêm thông tin số người trong phòng vào câu query
             $stmt = $pdo->prepare("
                 SELECT u.*, r.id as registration_id, 
                        rm.number as room_number, 
@@ -137,10 +137,11 @@ switch($action) {
                         u.year,
                         COALESCE(u.electricity_usage, 0) as electricity_usage,
                         COALESCE(u.water_usage, 0) as water_usage,
-                        -- Tính toán phí
-                        COALESCE(u.electricity_usage * 3500, 0) as calc_electricity_fee,
-                        COALESCE(u.water_usage * 15000, 0) as calc_water_fee,
-                        50000 as calc_internet_fee,
+                        -- Tính toán phí và chia đều cho số người
+                        COALESCE(u.electricity_usage * 3500 / rm.current_occupants, 0) as calc_electricity_fee,
+                        COALESCE(u.water_usage * 15000 / rm.current_occupants, 0) as calc_water_fee,
+                        50000 / rm.current_occupants as calc_internet_fee,
+                        rm.current_occupants,
                         CASE 
                             WHEN p.id IS NOT NULL AND p.payment_type = 'utility' THEN 'paid'
                             ELSE 'unpaid' 
@@ -168,6 +169,7 @@ switch($action) {
                         'electricity_fee' => (float)$utilities['calc_electricity_fee'],
                         'water_fee' => (float)$utilities['calc_water_fee'],
                         'internet_fee' => (float)$utilities['calc_internet_fee'],
+                        'current_occupants' => (int)$utilities['current_occupants'],
                         'status' => $utilities['status']
                     ];
                 }
@@ -656,15 +658,17 @@ switch($action) {
                 throw new Exception('Không tìm thấy thông tin đăng ký phòng');
             }
 
-            // Kiểm tra xem đã thanh toán tiện ích tháng này chưa
+            // Tạo payment_month với định dạng "month/year"
+            $payment_month = $data['month'] . '/' . $data['year'];
+
+            // Kiểm tra xem đã thanh toán tháng này chưa
             $stmt = $pdo->prepare("
                 SELECT id FROM payments 
                 WHERE registration_id = ? 
                 AND payment_type = 'utility'
-                AND MONTH(payment_date) = MONTH(CURRENT_DATE())
-                AND YEAR(payment_date) = YEAR(CURRENT_DATE())
+                AND payment_month = ?
             ");
-            $stmt->execute([$registration['id']]);
+            $stmt->execute([$registration['id'], $payment_month]);
             if ($stmt->fetch()) {
                 throw new Exception('Tiện ích tháng này đã được thanh toán');
             }
@@ -674,14 +678,16 @@ switch($action) {
                 INSERT INTO payments (
                     registration_id,
                     amount,
+                    payment_month,
+                    payment_type,
                     status,
-                    payment_date,
-                    payment_type
-                ) VALUES (?, ?, 'completed', NOW(), 'utility')
+                    payment_date
+                ) VALUES (?, ?, ?, 'utility', 'completed', NOW())
             ");
             $stmt->execute([
                 $registration['id'],
-                $data['electricity_fee'] + $data['water_fee'] + $data['internet_fee']
+                $data['electricity_fee'] + $data['water_fee'] + $data['internet_fee'],
+                $payment_month
             ]);
 
             $pdo->commit();
@@ -689,6 +695,77 @@ switch($action) {
         } catch (Exception $e) {
             $pdo->rollBack();
             echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        break;
+
+    case 'checkUnpaidUtilities':
+        checkLogin();
+        try {
+            // Lấy thông tin đăng ký phòng của sinh viên
+            $stmt = $pdo->prepare("
+                SELECT r.* FROM registrations r
+                WHERE r.student_id = ?
+            ");
+            $stmt->execute([$_SESSION['username']]);
+            $registration = $stmt->fetch();
+
+            if (!$registration) {
+                throw new Exception('Không tìm thấy thông tin đăng ký phòng');
+            }
+
+            // Lấy danh sách các tháng chưa thanh toán
+            $stmt = $pdo->prepare("
+                SELECT DISTINCT 
+                    u.month,
+                    u.year,
+                    u.electricity_usage,
+                    u.water_usage,
+                    u.electricity_usage * 3500 / rm.current_occupants as electricity_fee,
+                    u.water_usage * 15000 / rm.current_occupants as water_fee,
+                    50000 / rm.current_occupants as internet_fee
+                FROM utility_usage u
+                JOIN rooms rm ON u.room_id = rm.id
+                LEFT JOIN payments p ON p.registration_id = ? 
+                    AND p.payment_type = 'utility'
+                    AND p.payment_month = CONCAT(u.month, '/', u.year)
+                WHERE u.room_id = (SELECT room_id FROM registrations WHERE id = ?)
+                    AND p.id IS NULL
+                    AND (u.year < YEAR(CURRENT_DATE) 
+                        OR (u.year = YEAR(CURRENT_DATE) 
+                            AND u.month <= MONTH(CURRENT_DATE)))
+                ORDER BY u.year, u.month
+            ");
+            $stmt->execute([$registration['id'], $registration['id']]);
+            $unpaidMonths = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Tổ chức dữ liệu theo tháng
+            $utilityDetails = [];
+            foreach ($unpaidMonths as $month) {
+                $key = $month['month'] . '-' . $month['year'];
+                $utilityDetails[$key] = [
+                    'electricity_usage' => (float)$month['electricity_usage'],
+                    'water_usage' => (float)$month['water_usage'],
+                    'electricity_fee' => (float)$month['electricity_fee'],
+                    'water_fee' => (float)$month['water_fee'],
+                    'internet_fee' => (float)$month['internet_fee']
+                ];
+            }
+
+            echo json_encode([
+                'success' => true,
+                'unpaidMonths' => array_map(function($month) {
+                    return [
+                        'month' => (int)$month['month'],
+                        'year' => (int)$month['year']
+                    ];
+                }, $unpaidMonths),
+                'utilityDetails' => $utilityDetails
+            ]);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
         }
         break;
 
