@@ -445,65 +445,62 @@ async function showPaymentHistory() {
         const response = await fetch('user_api.php?action=getPaymentHistory');
         const data = await response.json();
 
-        if (data.success) {
-            const paymentRows = data.payments.map(payment => `
-                <tr>
-                    <td>${new Date(payment.payment_date).toLocaleDateString('vi-VN')}</td>
-                    <td>
-                        ${payment.payment_type === 'utility' 
-                            ? '<span class="badge bg-info">Tiện ích</span>' 
-                            : '<span class="badge bg-primary">Tiền phòng</span>'
-                        }
-                    </td>
-                    <td>${formatPrice(payment.amount)}đ</td>
-                    <td>
-                        ${payment.payment_type === 'utility' 
-                            ? `Thanh toán tiện ích tháng ${new Date(payment.payment_date).getMonth() + 1}/${new Date(payment.payment_date).getFullYear()}`
-                            : `Thanh toán tiền phòng tháng ${payment.month || ''}`
-                        }
-                    </td>
-                    <td>
-                        <span class="badge bg-success">
-                            <i class="fas fa-check"></i> Đã thanh toán
-                        </span>
-                    </td>
-                </tr>
-            `).join('');
-
-            Swal.fire({
-                title: 'Lịch sử thanh toán',
-                html: `
-                    <div class="payment-history">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Ngày</th>
-                                    <th>Loại</th>
-                                    <th>Số tiền</th>
-                                    <th>Mô tả</th>
-                                    <th>Trạng thái</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${paymentRows}
-                            </tbody>
-                        </table>
-                    </div>
-                `,
-                width: '800px',
-                customClass: {
-                    container: 'payment-history-modal'
-                }
-            });
-        } else {
-            throw new Error(data.message);
+        if (!data.success) {
+            throw new Error(data.message || 'Không thể tải lịch sử thanh toán');
         }
+
+        Swal.fire({
+            title: 'Lịch sử thanh toán',
+            html: `
+                <div class="payment-history-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Ngày</th>
+                                <th>Loại</th>
+                                <th>Số tiền</th>
+                                <th>Mô tả</th>
+                                <th>Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.payments.map(payment => `
+                                <tr>
+                                    <td>${new Date(payment.payment_date).toLocaleDateString('vi-VN')}</td>
+                                    <td>${payment.payment_type === 'utility' ? 'Tiện ích' : 'Tiền phòng'}</td>
+                                    <td class="amount">${formatPrice(payment.amount)}đ</td>
+                                    <td>${payment.description || `Thanh toán ${payment.payment_type === 'utility' ? 'tiện ích' : 'tiền phòng'} tháng ${payment.payment_month}`}</td>
+                                    <td>
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check"></i> Đã thanh toán
+                                        </span>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `,
+            showCloseButton: true,
+            showConfirmButton: false,
+            customClass: {
+                container: 'payment-history-modal',
+                popup: 'payment-history-popup',
+                closeButton: 'payment-history-close'
+            },
+            width: '90%',
+            heightAuto: false,
+            didOpen: () => {
+                document.querySelector('.swal2-container').style.padding = '0';
+            }
+        });
+
     } catch (error) {
-        console.error('Error loading payment history:', error);
+        console.error('Error:', error);
         Swal.fire({
             icon: 'error',
             title: 'Lỗi',
-            text: 'Không thể tải lịch sử thanh toán'
+            text: error.message
         });
     }
 }
