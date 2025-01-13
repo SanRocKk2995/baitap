@@ -1,0 +1,79 @@
+--DATABASE 1
+CREATE DATABASE ktx_management CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+USE ktx_management;
+
+CREATE TABLE buildings (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(10) NOT NULL UNIQUE
+);
+
+CREATE TABLE rooms (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    number VARCHAR(10) NOT NULL,
+    building_id INT NOT NULL,
+    max_occupants INT NOT NULL,
+    current_occupants INT DEFAULT 0,
+    price DECIMAL(10,2) NOT NULL,
+    status VARCHAR(20) DEFAULT 'available',
+    FOREIGN KEY (building_id) REFERENCES buildings(id)
+);
+
+CREATE TABLE registrations (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    room_id INT NOT NULL,
+    student_name VARCHAR(100) NOT NULL,
+    student_id VARCHAR(20) NOT NULL,
+    student_phone VARCHAR(20) NOT NULL,
+    student_email VARCHAR(100) NOT NULL,
+    student_faculty VARCHAR(100) NOT NULL,
+    registration_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (room_id) REFERENCES rooms(id)
+);
+ALTER TABLE registrations 
+ADD COLUMN payment_status ENUM('paid', 'unpaid') DEFAULT 'unpaid',
+ADD COLUMN last_payment_date DATETIME NULL;
+
+-- Thêm dữ liệu mẫu cho buildings
+INSERT INTO buildings (name) VALUES ('A'), ('B'), ('C');
+
+CREATE TABLE payments (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    registration_id INT,
+    amount DECIMAL(10,2),
+    payment_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    semester VARCHAR(20),
+    status VARCHAR(20) DEFAULT 'pending',
+    FOREIGN KEY (registration_id) REFERENCES registrations(id)
+);
+ALTER TABLE payments ADD COLUMN electricity_fee DECIMAL(10,2) DEFAULT 0;
+ALTER TABLE payments ADD COLUMN water_fee DECIMAL(10,2) DEFAULT 0;
+ALTER TABLE payments ADD COLUMN internet_fee DECIMAL(10,2) DEFAULT 0;
+CREATE TABLE utility_usage (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    room_id INT NOT NULL,
+    electricity_usage DECIMAL(10,2) NOT NULL DEFAULT 0,
+    water_usage DECIMAL(10,2) NOT NULL DEFAULT 0,
+    month INT NOT NULL,
+    year INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (room_id) REFERENCES rooms(id),
+    UNIQUE KEY room_month_year (room_id, month, year)
+);
+
+//DATABASE 2:
+CREATE DATABASE IF NOT EXISTS login_system;
+USE login_system;
+
+CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+    ALTER TABLE users ADD COLUMN role ENUM('user', 'admin') DEFAULT 'user';
+    ALTER TABLE login_system.users
+    ADD COLUMN fullname VARCHAR(255) DEFAULT NULL,
+    ADD COLUMN phone VARCHAR(20) DEFAULT NULL,
+    ADD COLUMN faculty VARCHAR(255) DEFAULT NULL;
