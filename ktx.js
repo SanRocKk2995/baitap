@@ -1131,11 +1131,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
 });
 
-async function showUnpaidStudents() {
+async function showUnpaidUtilityStudents() {
     try {
-        const response = await fetch('api.php?action=getUnpaidStudents');
-        const students = await response.json();
+        const response = await fetch('api.php?action=getUnpaidUtilityStudents');
+        const result = await response.json();
         
+        if (!result.success) {
+            throw new Error(result.error || 'Không thể lấy dữ liệu');
+        }
+        
+        const students = result.data;
         const roomGrid = document.getElementById('roomGrid');
         const registrationsList = document.getElementById('registrationsList');
         
@@ -1144,49 +1149,73 @@ async function showUnpaidStudents() {
         
         const registrationsContainer = document.getElementById('registrationsContainer');
         
-        if (students.length === 0) {
-            registrationsContainer.innerHTML = '<div class="no-registrations">Không có sinh viên nào chưa đóng tiền</div>';
+        if (!students || students.length === 0) {
+            registrationsContainer.innerHTML = '<div class="no-registrations">Không có sinh viên nào chưa đóng tiền tiện ích tháng này</div>';
             return;
         }
-        
-        function getDaysOverdue(registrationDate) {
-            const regDate = new Date(registrationDate);
-            const now = new Date();
-            const diffTime = Math.abs(now - regDate);
-            return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        }
-        
+
         registrationsContainer.innerHTML = `
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h3>Danh sách sinh viên chưa đóng tiền (${students.length} sinh viên)</h3>
-                <div class="btn-group">
+                <h3>Danh sách sinh viên chưa đóng tiền tiện ích tháng ${students[0].current_month}/${students[0].current_year}</h3>
+                <div class="search-box">
+                    <input type="text" id="unpaidUtilitySearchInput" placeholder="Tìm kiếm..." oninput="filterUnpaidUtilityStudents()">
                 </div>
             </div>
-            ${students.map(student => `
-                <div class="registration-item unpaid">
-                    <div class="student-info">
-                        <h3>Phòng ${student.room_number} - Tòa ${student.building_name}</h3>
-                        <p><strong>Họ tên:</strong> ${student.student_name}</p>
-                        <p><strong>MSSV:</strong> ${student.student_id}</p>
-                        <p><strong>SĐT:</strong> ${student.student_phone}</p>
-                        <p><strong>Email:</strong> ${student.student_email}</p>
-                        <p><strong>Khoa:</strong> ${student.student_faculty}</p>
-                        <p><strong>Ngày đăng ký:</strong> ${student.formatted_reg_date}</p>
-                        <p class="text-danger"><strong>Số ngày chưa đóng:</strong> ${getDaysOverdue(student.registration_date)} ngày</p>
+            <div id="unpaidUtilityStudentsList">
+                ${students.map(student => `
+                    <div class="registration-item unpaid" data-student-info="${student.student_name.toLowerCase()} ${student.student_id.toLowerCase()}">
+                        <div class="student-info">
+                            <h3>Phòng ${student.room_number} - Tòa ${student.building_name}</h3>
+                            <p><strong>Họ tên:</strong> ${student.student_name}</p>
+                            <p><strong>MSSV:</strong> ${student.student_id}</p>
+                            <p><strong>SĐT:</strong> ${student.student_phone}</p>
+                            <p><strong>Email:</strong> ${student.student_email}</p>
+                            <p><strong>Khoa:</strong> ${student.student_faculty}</p>
+                            <div class="utility-details">
+                                <h4>Chi tiết sử dụng phòng:</h4>
+                                <p><strong>Điện:</strong> ${student.usage_details.electricity} kWh</p>
+                                <p><strong>Nước:</strong> ${student.usage_details.water} m³</p>
+                                <h4>Chi phí phải đóng (đã chia ${student.current_occupants} người):</h4>
+                                <p><strong>Tiền điện:</strong> ${student.utility_fees.electricity} VNĐ</p>
+                                <p><strong>Tiền nước:</strong> ${student.utility_fees.water} VNĐ</p>
+                                <p><strong>Tiền Internet:</strong> ${student.utility_fees.internet} VNĐ</p>
+                                <p class="total-fee"><strong>Tổng cộng:</strong> ${student.utility_fees.total} VNĐ</p>
+                            </div>
+                        </div>
+                        <div class="registration-actions">
+                            <button onclick="openUtilityPayment(${student.id}, ${student.utility_fees.total.replace(/\./g, '')})" class="btn btn-primary">
+                                <i class="fas fa-money-bill-wave"></i> Thanh toán tiện ích
+                            </button>
+                        </div>
                     </div>
-                    <div class="registration-actions">
-                        <button onclick="openPaymentSearch()" class="btn btn-primary">
-                            <i class="fas fa-money-bill-wave"></i> Thanh toán
-                        </button>
-                    </div>
-                </div>
-            `).join('')}
+                `).join('')}
+            </div>
         `;
-        
     } catch (error) {
-        console.error('Error fetching unpaid students:', error);
-        alert('Có lỗi xảy ra khi lấy danh sách sinh viên chưa đóng tiền');
+        console.error('Error:', error);
+        swal({
+            title: "Lỗi!",
+            text: error.message || "Có lỗi xảy ra khi lấy danh sách sinh viên chưa đóng tiền tiện ích",
+            icon: "error",
+            button: "Đóng",
+        });
     }
+}
+
+// Thêm hàm lọc sinh viên
+function filterUnpaidUtilityStudents() {
+    const searchInput = document.getElementById('unpaidUtilitySearchInput');
+    const filter = searchInput.value.toLowerCase();
+    const items = document.querySelectorAll('#unpaidUtilityStudentsList .registration-item');
+
+    items.forEach(item => {
+        const info = item.getAttribute('data-student-info');
+        if (info.includes(filter)) {
+            item.style.display = '';
+        } else {
+            item.style.display = 'none';
+        }
+    });
 }
 
 async function showPaidStudents() {

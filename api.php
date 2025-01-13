@@ -342,13 +342,18 @@ switch($action) {
         }
         break;
     case 'getUnpaidStudents':
-        $sql = "SELECT r.*, rm.number as room_number, b.name as building_name,
-                rm.price as room_price,
-                DATE_FORMAT(r.registration_date, '%d/%m/%Y') as formatted_reg_date
-                FROM registrations r 
-                JOIN rooms rm ON r.room_id = rm.id 
+        $sql = "SELECT DISTINCT 
+                    r.*, 
+                    rm.number as room_number,
+                    rm.price as room_price,
+                    b.name as building_name,
+                    DATE_FORMAT(r.registration_date, '%d/%m/%Y') as formatted_reg_date
+                FROM registrations r
+                JOIN rooms rm ON r.room_id = rm.id
                 JOIN buildings b ON rm.building_id = b.id
-                WHERE r.payment_status = 'unpaid'
+                WHERE r.id NOT IN (
+                    SELECT registration_id FROM payments
+                )
                 ORDER BY r.registration_date DESC";
         
         $stmt = $pdo->query($sql);
@@ -530,6 +535,100 @@ switch($action) {
             
             echo json_encode(['success' => true]);
         } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+        break;
+    case 'getUnpaidUtilityStudents':
+        try {
+            $currentMonth = date('n');
+            $currentYear = date('Y');
+            
+            // Debug: In ra các giá trị
+            error_log("Current Month: " . $currentMonth);
+            error_log("Current Year: " . $currentYear);
+            
+            $sql = "SELECT DISTINCT 
+                        r.*, 
+                        rm.number as room_number,
+                        rm.current_occupants,
+                        rm.price as room_price,
+                        b.name as building_name,
+                        u.electricity_usage,
+                        u.water_usage,
+                        up.electricity_price,
+                        up.water_price,
+                        up.internet_price
+                    FROM registrations r
+                    JOIN rooms rm ON r.room_id = rm.id
+                    JOIN buildings b ON rm.building_id = b.id
+                    LEFT JOIN utility_usage u ON rm.id = u.room_id 
+                        AND u.month = ? AND u.year = ?
+                    LEFT JOIN utility_prices up ON up.id = (
+                        SELECT id FROM utility_prices 
+                        ORDER BY created_at DESC 
+                        LIMIT 1
+                    )
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM payments p 
+                        WHERE p.registration_id = r.id 
+                        AND p.payment_type = 'utility'
+                        AND p.payment_month = ?
+                        AND p.payment_year = ?
+                    )
+                    ORDER BY b.name, rm.number";
+
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$currentMonth, $currentYear, $currentMonth, $currentYear]);
+            $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Debug: In ra số lượng kết quả
+            error_log("Number of students found: " . count($students));
+            
+            // Tính toán phí tiện ích cho mỗi sinh viên
+            foreach ($students as &$student) {
+                // Đảm bảo current_occupants không bao giờ là 0
+                $roommates_count = max(1, intval($student['current_occupants']));
+                
+                // Chuyển đổi các giá trị null thành 0
+                $electricity_usage = floatval($student['electricity_usage'] ?? 0);
+                $water_usage = floatval($student['water_usage'] ?? 0);
+                $electricity_price = floatval($student['electricity_price'] ?? 0);
+                $water_price = floatval($student['water_price'] ?? 0);
+                $internet_price = floatval($student['internet_price'] ?? 0);
+                
+                // Tính toán chi phí
+                $electricity_fee = ($electricity_usage * $electricity_price) / $roommates_count;
+                $water_fee = ($water_usage * $water_price) / $roommates_count;
+                $internet_fee = $internet_price / $roommates_count;
+                
+                $total = $electricity_fee + $water_fee + $internet_fee;
+                
+                $student['utility_fees'] = [
+                    'electricity' => number_format($electricity_fee, 0, ',', '.'),
+                    'water' => number_format($water_fee, 0, ',', '.'),
+                    'internet' => number_format($internet_fee, 0, ',', '.'),
+                    'total' => number_format($total, 0, ',', '.')
+                ];
+                
+                $student['usage_details'] = [
+                    'electricity' => $electricity_usage,
+                    'water' => $water_usage
+                ];
+                
+                $student['current_month'] = $currentMonth;
+                $student['current_year'] = $currentYear;
+            }
+            
+            echo json_encode([
+                'success' => true,
+                'data' => $students
+            ]);
+            
+        } catch (Exception $e) {
+            error_log("Error in getUnpaidUtilityStudents: " . $e->getMessage());
             echo json_encode([
                 'success' => false,
                 'error' => $e->getMessage()
