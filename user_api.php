@@ -77,7 +77,10 @@ switch($action) {
             // Chuyển đổi student_id sang COLLATE giống nhau
             $stmt = $pdo->prepare("
                 SELECT u.*, r.id as registration_id, 
-                       rm.number as room_number, rm.price,
+                       rm.number as room_number, 
+                       rm.price,
+                       rm.current_occupants,
+                       rm.max_occupants,
                        b.name as building_name,
                        p.status as payment_status,
                        p.amount as payment_amount,
@@ -111,7 +114,9 @@ switch($action) {
                 $response['room'] = [
                     'number' => $info['room_number'],
                     'building' => $info['building_name'],
-                    'price' => $info['price']
+                    'price' => $info['price'],
+                    'current_occupants' => $info['current_occupants'],
+                    'max_occupants' => $info['max_occupants']
                 ];
             }
 
@@ -189,13 +194,7 @@ switch($action) {
                 error_log("Payment month: " . $payment['payment_month']);
             }
 
-            echo json_encode([
-                'success' => true,
-                'user' => $info,
-                'room' => $response['room'],
-                'payment' => $response['payment'],
-                'utilities' => $response['utilities']
-            ]);
+            echo json_encode($response);
         } catch (Exception $e) {
             error_log("Error in getDashboardInfo: " . $e->getMessage());
             echo json_encode([
@@ -375,33 +374,88 @@ switch($action) {
     case 'checkPaymentStatus':
         checkLogin();
         try {
+            $requestedMonth = $_GET['month'] ?? date('n/Y');
+            
             // Lấy thông tin đăng ký phòng của sinh viên
             $stmt = $pdo->prepare("
-                SELECT r.* FROM registrations r
+                SELECT r.*, DATE_FORMAT(r.registration_date, '%c/%Y') as start_month 
+                FROM registrations r
                 WHERE r.student_id = ?
             ");
             $stmt->execute([$_SESSION['username']]);
             $registration = $stmt->fetch();
 
             if (!$registration) {
-                throw new Exception('Không tìm thấy thông tin đăng ký phòng');
+                throw new Exception('Bạn chưa đăng ký phòng hoặc đăng ký đã bị hủy');
             }
 
-            // Kiểm tra thanh toán của tháng hiện tại
+            // Kiểm tra các tháng trước
+            $currentDate = date_create_from_format('n/Y', $requestedMonth);
+            if (!$currentDate) {
+                throw new Exception('Định dạng tháng không hợp lệ');
+            }
+
+            // Lấy danh sách các tháng chưa thanh toán từ tháng đăng ký
             $stmt = $pdo->prepare("
-                SELECT COUNT(*) FROM payments 
-                WHERE registration_id = ? 
-                AND MONTH(payment_date) = MONTH(CURRENT_DATE())
-                AND YEAR(payment_date) = YEAR(CURRENT_DATE())
+                WITH RECURSIVE months AS (
+                    -- Bắt đầu từ tháng đăng ký
+                    SELECT STR_TO_DATE(CONCAT('01/', ?), '%d/%m/%Y') as month_date,
+                           ? as month_str
+                    UNION ALL
+                    SELECT DATE_ADD(month_date, INTERVAL 1 MONTH),
+                           DATE_FORMAT(DATE_ADD(month_date, INTERVAL 1 MONTH), '%c/%Y')
+                    FROM months
+                    WHERE month_date < STR_TO_DATE(CONCAT('01/', ?), '%d/%m/%Y')
+                )
+                SELECT m.month_str
+                FROM months m
+                LEFT JOIN payments p ON p.registration_id = ? 
+                    AND p.payment_month = m.month_str
+                WHERE p.id IS NULL
+                AND m.month_date <= CURRENT_DATE()
+                ORDER BY m.month_date ASC
             ");
-            $stmt->execute([$registration['id']]);
+
+            // Thêm năm vào tháng nếu chỉ có tháng
+            $startMonth = $registration['start_month'];
+            if (strlen($startMonth) <= 2) {
+                $startMonth .= '/' . date('Y');
+            }
+            
+            $stmt->execute([
+                $startMonth, 
+                $startMonth,
+                $requestedMonth,
+                $registration['id']
+            ]);
+            $unpaidMonths = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+            // Kiểm tra thanh toán của tháng được yêu cầu
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) 
+                FROM payments 
+                WHERE registration_id = ? 
+                AND payment_month = ?
+            ");
+            $stmt->execute([$registration['id'], $requestedMonth]);
             $hasPayment = $stmt->fetchColumn() > 0;
+
+            // Kiểm tra xem tháng yêu cầu có phải là tháng trong tương lai không
+            $requestedDate = date_create_from_format('n/Y', $requestedMonth);
+            $currentDate = new DateTime();
+            $isFutureMonth = $requestedDate > $currentDate;
 
             echo json_encode([
                 'success' => true,
-                'canPay' => !$hasPayment
+                'canPay' => !$hasPayment && !$isFutureMonth,
+                'requestedMonth' => $requestedMonth,
+                'startMonth' => $startMonth,
+                'hasPayment' => $hasPayment,
+                'unpaidMonths' => $unpaidMonths,
+                'isFutureMonth' => $isFutureMonth
             ]);
         } catch (Exception $e) {
+            error_log("Error in checkPaymentStatus: " . $e->getMessage());
             echo json_encode([
                 'success' => false,
                 'message' => $e->getMessage()
@@ -412,11 +466,14 @@ switch($action) {
     case 'makePayment':
         checkLogin();
         try {
+            $data = json_decode(file_get_contents('php://input'), true);
+            $paymentMonth = $data['month'] ?? date('n/Y');
+            
             $pdo->beginTransaction();
 
             // Lấy thông tin đăng ký phòng của sinh viên
             $stmt = $pdo->prepare("
-                SELECT r.*, rm.price 
+                SELECT r.*, rm.price, rm.current_occupants 
                 FROM registrations r
                 JOIN rooms rm ON r.room_id = rm.id
                 WHERE r.student_id = ?
@@ -425,20 +482,23 @@ switch($action) {
             $registration = $stmt->fetch();
 
             if (!$registration) {
-                throw new Exception('Không tìm thấy thông tin đăng ký phòng');
+                throw new Exception('Bạn chưa đăng ký phòng hoặc đăng ký đã bị hủy');
             }
 
-            // Kiểm tra lại một lần nữa trước khi thanh toán
+            // Kiểm tra xem đã thanh toán tháng này chưa
             $stmt = $pdo->prepare("
-                SELECT COUNT(*) FROM payments 
+                SELECT COUNT(*) 
+                FROM payments 
                 WHERE registration_id = ? 
-                AND MONTH(payment_date) = MONTH(CURRENT_DATE())
-                AND YEAR(payment_date) = YEAR(CURRENT_DATE())
+                AND payment_month = ?
             ");
-            $stmt->execute([$registration['id']]);
+            $stmt->execute([$registration['id'], $paymentMonth]);
             if ($stmt->fetchColumn() > 0) {
                 throw new Exception('Bạn đã thanh toán cho tháng này rồi');
             }
+
+            // Tính toán số tiền phải trả (chia theo số người)
+            $amountPerPerson = round($registration['price'] / $registration['current_occupants']);
 
             // Thêm thanh toán mới
             $stmt = $pdo->prepare("
@@ -452,14 +512,15 @@ switch($action) {
             ");
             $stmt->execute([
                 $registration['id'],
-                $registration['price'],
-                date('n/Y')
+                $amountPerPerson,
+                $paymentMonth
             ]);
 
             $pdo->commit();
             echo json_encode(['success' => true]);
         } catch (Exception $e) {
             $pdo->rollBack();
+            error_log("Error in makePayment: " . $e->getMessage());
             echo json_encode([
                 'success' => false,
                 'message' => $e->getMessage()

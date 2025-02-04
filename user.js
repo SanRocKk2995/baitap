@@ -87,11 +87,13 @@ async function showDashboard() {
                                 <p><strong>Phòng:</strong> ${data.room.number}</p>
                                 <p><strong>Tòa:</strong> ${data.room.building}</p>
                                 <p><strong>Giá phòng:</strong> ${formatPrice(data.room.price)}đ/tháng</p>
+                                <p><strong>Số người hiện tại:</strong> ${data.room.current_occupants}/${data.room.max_occupants}</p>
+                                <p><strong>Tiền phòng mỗi người:</strong> ${formatPrice(Math.round(data.room.price / data.room.current_occupants))}đ/tháng</p>
                             </div>
                             <div class="room-actions">
                                 ${needNewPayment ? `
-                                    <button class="payment-btn" onclick="makePayment('${data.room.id}', ${data.room.price})">
-                                        <i class="fas fa-money-bill"></i> Thanh toán tiền phòng tháng ${currentDate.getMonth() + 1}
+                                    <button class="payment-btn" onclick="makePayment('${data.room.id}', ${Math.round(data.room.price / data.room.current_occupants)})">
+                                        <i class="fas fa-money-bill"></i> Thanh toán tiền phòng tháng ${new Date().getMonth() + 1}
                                     </button>
                                 ` : `
                                     <button class="payment-btn" disabled style="background-color: #ccc;">
@@ -499,20 +501,79 @@ async function showPaymentHistory() {
 // Thêm hàm thanh toán
 async function makePayment(registrationId, amount) {
     try {
+        const currentDate = new Date();
+        const currentMonth = `${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`;
+
         // Kiểm tra trạng thái thanh toán hiện tại
-        const response = await fetch('user_api.php?action=checkPaymentStatus');
+        const response = await fetch(`user_api.php?action=checkPaymentStatus&month=${currentMonth}`);
         const data = await response.json();
+
+        console.log('Payment check response:', data); // Debug log
 
         if (!data.success) {
             throw new Error(data.message);
         }
 
+        // Kiểm tra các tháng chưa thanh toán
+        if (data.unpaidMonths && data.unpaidMonths.length > 0) {
+            const earliestUnpaidMonth = data.unpaidMonths[0];
+            
+            // Nếu tháng yêu cầu không phải là tháng đầu tiên chưa thanh toán
+            if (earliestUnpaidMonth !== currentMonth) {
+                const result = await Swal.fire({
+                    icon: 'warning',
+                    title: 'Thanh toán tháng trước',
+                    html: `
+                        Bạn cần thanh toán tiền phòng từ tháng ${data.startMonth}.<br>
+                        Vui lòng thanh toán tháng ${earliestUnpaidMonth} trước.<br>
+                        <small class="text-muted">Hệ thống yêu cầu thanh toán theo thứ tự thời gian</small>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: 'Thanh toán ngay',
+                    cancelButtonText: 'Để sau'
+                });
+
+                if (result.isConfirmed) {
+                    // Thực hiện thanh toán cho tháng trước
+                    const paymentResponse = await fetch('user_api.php?action=makePayment', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ month: earliestUnpaidMonth })
+                    });
+
+                    const paymentData = await paymentResponse.json();
+
+                    if (paymentData.success) {
+                        await Swal.fire({
+                            icon: 'success',
+                            title: 'Thành công',
+                            text: `Đã thanh toán tháng ${earliestUnpaidMonth} thành công!`
+                        });
+                        showDashboard(); // Cập nhật lại dashboard
+                    } else {
+                        throw new Error(paymentData.message);
+                    }
+                }
+                return;
+            }
+        }
+
         if (!data.canPay) {
-            await Swal.fire({
-                icon: 'warning',
-                title: 'Thông báo',
-                text: 'Bạn đã thanh toán cho tháng này rồi!'
-            });
+            if (data.isFutureMonth) {
+                await Swal.fire({
+                    icon: 'warning',
+                    title: 'Thông báo',
+                    text: 'Không thể thanh toán cho tháng trong tương lai!'
+                });
+            } else {
+                await Swal.fire({
+                    icon: 'warning',
+                    title: 'Thông báo',
+                    text: 'Bạn đã thanh toán cho tháng này rồi!'
+                });
+            }
             return;
         }
 
@@ -522,6 +583,7 @@ async function makePayment(registrationId, amount) {
             html: `
                 <div class="payment-details">
                     <p>Số tiền cần thanh toán: ${formatPrice(amount)}đ</p>
+                    <p>Thanh toán cho tháng: ${currentMonth}</p>
                 </div>
             `,
             icon: 'question',
@@ -531,16 +593,17 @@ async function makePayment(registrationId, amount) {
         });
 
         if (result.isConfirmed) {
-            const response = await fetch('user_api.php?action=makePayment', {
+            const paymentResponse = await fetch('user_api.php?action=makePayment', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                }
+                },
+                body: JSON.stringify({ month: currentMonth })
             });
 
-            const data = await response.json();
+            const paymentData = await paymentResponse.json();
 
-            if (data.success) {
+            if (paymentData.success) {
                 await Swal.fire({
                     icon: 'success',
                     title: 'Thành công',
@@ -548,7 +611,7 @@ async function makePayment(registrationId, amount) {
                 });
                 showDashboard();
             } else {
-                throw new Error(data.message);
+                throw new Error(paymentData.message);
             }
         }
     } catch (error) {

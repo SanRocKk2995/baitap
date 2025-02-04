@@ -66,22 +66,26 @@ function createRoomCard(room) {
                 <span class="room-status ${room.status}">${statusText}</span>
                 <h3>Phòng ${room.number}</h3>
                 <p>Số người: ${room.current_occupants}/${room.max_occupants}</p>
-                <p>Giá: ${formatPrice(room.price)}đ/học kỳ</p>
+                <p>Giá: ${formatPrice(room.price)}đ/tháng</p>
             </div>
             <div class="room-actions" id="actions-${room.id}">
                 ${room.status !== 'occupied' ? 
                     `<button onclick="openRegisterModal(${room.id})">
-                        <i class="fas fa-user-plus"></i> Đăng ký
+                        <i class="fas fa-user-plus"></i>
+                        Đăng ký
                     </button>` : ''
                 }
                 <button onclick="openEditStatus(${room.id})">
-                    <i class="fas fa-edit"></i> Sửa trạng thái
+                    <i class="fas fa-edit"></i>
+                    Sửa trạng thái
                 </button>
                 <button onclick="openUtilityUsage(${room.id}, '${room.number}')">
-                    <i class="fas fa-bolt"></i> Điện nước
+                    <i class="fas fa-bolt"></i>
+                    Điện nước
                 </button>
                 <button onclick="showStudentList(${room.id})">
-                    <i class="fas fa-users"></i> Danh sách sinh viên
+                    <i class="fas fa-users"></i>
+                    Danh sách SV
                 </button>
             </div>
         </div>
@@ -915,7 +919,7 @@ async function searchStudentPayment() {
                 <p><strong>Phòng:</strong> ${data.room_number} - Tòa ${data.building_name}</p>
                 <div class="fees-section">
                     <h4>Phí phòng</h4>
-                    <p><strong>Giá phòng:</strong> ${formatPrice(data.room_price)}đ/học kỳ</p>
+                    <p><strong>Giá phòng:</strong> ${formatPrice(data.room_price)}đ/tháng</p>
                     
                     <h4>Phí sinh hoạt</h4>
                     <div class="utility-fees">
@@ -1188,7 +1192,7 @@ async function showUnpaidStudents() {
 async function showPaidStudents() {
     try {
         const response = await fetch('api.php?action=getPaidStudents');
-        const students = await response.json();
+        const payments = await response.json();
         
         const roomGrid = document.getElementById('roomGrid');
         const registrationsList = document.getElementById('registrationsList');
@@ -1198,37 +1202,67 @@ async function showPaidStudents() {
         
         const registrationsContainer = document.getElementById('registrationsContainer');
         
-        if (students.length === 0) {
-            registrationsContainer.innerHTML = '<div class="no-registrations">Không có sinh viên nào đã đóng tiền</div>';
+        if (payments.length === 0) {
+            registrationsContainer.innerHTML = '<div class="no-registrations">Không có lịch sử đóng tiền</div>';
             return;
         }
 
         registrationsContainer.innerHTML = `
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h3>Danh sách sinh viên đã đóng tiền (${students.length} sinh viên)</h3>
-                <div class="btn-group">
-                </div>
+                <h3>Lịch sử đóng tiền của sinh viên (${payments.length} lượt đóng)</h3>
             </div>
-            ${students.map(student => `
+            ${payments.map(payment => `
                 <div class="registration-item paid">
                     <div class="student-info">
-                        <h3>Phòng ${student.room_number} - Tòa ${student.building_name}</h3>
-                        <p><strong>Họ tên:</strong> ${student.student_name}</p>
-                        <p><strong>MSSV:</strong> ${student.student_id}</p>
-                        <p><strong>SĐT:</strong> ${student.student_phone}</p>
-                        <p><strong>Email:</strong> ${student.student_email}</p>
-                        <p><strong>Khoa:</strong> ${student.student_faculty}</p>
-                        <p><strong>Ngày đăng ký:</strong> ${student.formatted_reg_date}</p>
-                        <p class="text-success"><strong>Ngày đóng tiền:</strong> ${student.formatted_payment_date}</p>
+                        <h3>Phòng ${payment.room_number} - Tòa ${payment.building_name}</h3>
+                        <p><strong>Họ tên:</strong> ${payment.student_name}</p>
+                        <p><strong>MSSV:</strong> ${payment.student_id}</p>
+                        <p><strong>SĐT:</strong> ${payment.student_phone}</p>
+                        <p><strong>Email:</strong> ${payment.student_email}</p>
+                        <p><strong>Khoa:</strong> ${payment.student_faculty}</p>
+                        <p><strong>Ngày đăng ký phòng:</strong> ${payment.formatted_reg_date}</p>
+                        <p class="text-success"><strong>Ngày đóng tiền:</strong> ${payment.formatted_payment_date}</p>
+                        <p class="text-primary"><strong>Số tiền đã đóng:</strong> ${payment.amount}</p>
+                        <p><strong>Tháng đóng:</strong> ${payment.payment_month || 'Không có thông tin'}</p>
+                        <p><strong>Loại thanh toán:</strong> ${getPaymentTypeText(payment.payment_type)}</p>
+                        <p><strong>Trạng thái:</strong> <span class="status-badge ${payment.status.toLowerCase()}">${getPaymentStatusText(payment.status)}</span></p>
                     </div>
                 </div>
             `).join('')}
         `;
         
     } catch (error) {
-        console.error('Error fetching paid students:', error);
-        alert('Có lỗi xảy ra khi lấy danh sách sinh viên đã đóng tiền');
+        console.error('Error fetching payment history:', error);
+        swal({
+            title: "Lỗi!",
+            text: "Có lỗi xảy ra khi lấy lịch sử đóng tiền",
+            icon: "error",
+            button: "Đóng",
+        });
     }
+}
+
+// Hàm chuyển đổi loại thanh toán sang tiếng Việt
+function getPaymentTypeText(type) {
+    const types = {
+        'cash': 'Tiền mặt',
+        'transfer': 'Chuyển khoản',
+        'card': 'Thẻ',
+        // Thêm các loại thanh toán khác nếu cần
+    };
+    return types[type] || type;
+}
+
+// Hàm chuyển đổi trạng thái thanh toán sang tiếng Việt
+function getPaymentStatusText(status) {
+    const statuses = {
+        'pending': 'Đang xử lý',
+        'completed': 'Hoàn thành',
+        'failed': 'Thất bại',
+        'cancelled': 'Đã hủy'
+        // Thêm các trạng thái khác nếu cần
+    };
+    return statuses[status] || status;
 }
 
 // Hàm tính tổng phí

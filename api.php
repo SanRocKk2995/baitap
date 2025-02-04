@@ -362,32 +362,33 @@ switch($action) {
         echo json_encode($students);
         break;
     case 'getPaidStudents':
-        $sql = "SELECT r.*, rm.number as room_number, b.name as building_name,
-                DATE_FORMAT(r.registration_date, '%d/%m/%Y') as formatted_reg_date,
-                DATE_FORMAT(r.last_payment_date, '%d/%m/%Y') as formatted_payment_date,
-                p.amount as payment_amount, p.semester
-                FROM registrations r 
+        $sql = "SELECT 
+                    p.*,
+                    r.student_name, 
+                    r.student_id,
+                    r.student_phone,
+                    r.student_email,
+                    r.student_faculty,
+                    rm.number as room_number, 
+                    b.name as building_name,
+                    DATE_FORMAT(p.payment_date, '%d/%m/%Y') as formatted_payment_date,
+                    DATE_FORMAT(r.registration_date, '%d/%m/%Y') as formatted_reg_date
+                FROM payments p
+                JOIN registrations r ON p.registration_id = r.id 
                 JOIN rooms rm ON r.room_id = rm.id 
                 JOIN buildings b ON rm.building_id = b.id
-                LEFT JOIN payments p ON r.id = p.registration_id
-                WHERE r.payment_status = 'paid'
-                ORDER BY r.last_payment_date DESC";
+                ORDER BY p.payment_date DESC";
         
         $stmt = $pdo->query($sql);
-        $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $payments = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        // Định dạng lại dữ liệu để hiển thị
-        foreach ($students as &$student) {
-            $student['payment_amount'] = number_format($student['payment_amount'], 0, ',', '.') . ' VNĐ';
-            // Thêm thông tin học kỳ nếu có
-            if ($student['semester']) {
-                $student['payment_info'] = "Đã đóng {$student['payment_amount']} cho {$student['semester']}";
-            } else {
-                $student['payment_info'] = "Đã đóng {$student['payment_amount']}";
-            }
+        // Định dạng lại số tiền
+        foreach ($payments as &$payment) {
+            $payment['amount'] = number_format($payment['amount'], 0, ',', '.') . ' VNĐ';
+            $payment['payment_status'] = $payment['status']; // Đổi tên field để phù hợp với frontend
         }
         
-        echo json_encode($students);
+        echo json_encode($payments);
         break;
     case 'getUtilityPrices':
         try {
