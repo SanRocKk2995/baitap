@@ -298,23 +298,23 @@ Dự án LiteBuy là một hệ thống thương mại điện tử full-stack s
 
 ### 🎨 THƊ MỤC STYLES (CSS Styling)
 
-**📄 src/styles/admin.css** - Admin dashboard styling
-**📄 src/styles/auth.css** - Authentication pages styling  
-**📄 src/styles/carousel.css** - Carousel component styling
-**📄 src/styles/cart.css** - Shopping cart styling
-**📄 src/styles/checkout.css** - Checkout process styling
-**📄 src/styles/flashSale.css** - Flash sale components styling
-**📄 src/styles/footer.css** - Footer component styling
-**📄 src/styles/home.css** - Homepage styling
-**📄 src/styles/navbar.css** - Navigation bar styling
-**📄 src/styles/orderStatus.css** - Order tracking styling
-**📄 src/styles/popupPromotion.css** - Popup modal styling
-**📄 src/styles/productDetail.css** - Product detail page styling
-**📄 src/styles/productManagement.css** - Product management styling
-**📄 src/styles/productReviews.css** - Reviews component styling
-**📄 src/styles/products.css** - Products listing styling
-**📄 src/styles/profile.css** - User profile styling
-**📄 src/styles/seller.css** - Seller dashboard styling
+**📄 src/styles/admin.css** - Admin dashboard styling<br>
+**📄 src/styles/auth.css** - Authentication pages styling<br>
+**📄 src/styles/carousel.css** - Carousel component styling<br>
+**📄 src/styles/cart.css** - Shopping cart styling<br>
+**📄 src/styles/checkout.css** - Checkout process styling<br>
+**📄 src/styles/flashSale.css** - Flash sale components styling<br>
+**📄 src/styles/footer.css** - Footer component styling<br>
+**📄 src/styles/home.css** - Homepage styling<br>
+**📄 src/styles/navbar.css** - Navigation bar styling<br>
+**📄 src/styles/orderStatus.css** - Order tracking styling<br>
+**📄 src/styles/popupPromotion.css** - Popup modal styling<br>
+**📄 src/styles/productDetail.css** - Product detail page styling<br>
+**📄 src/styles/productManagement.css** - Product management styling<br>
+**📄 src/styles/productReviews.css** - Reviews component styling<br>
+**📄 src/styles/products.css** - Products listing styling<br>
+**📄 src/styles/profile.css** - User profile styling<br>
+**📄 src/styles/seller.css** - Seller dashboard styling<br>
 **📄 src/styles/snowEffect.css** - Snow animation styling
 
 ### 📊 THƊ MỤC DATA (Static Data)
@@ -760,3 +760,4 @@ Dự án LiteBuy là một hệ thống e-commerce hoàn chỉnh với:
 - **Best Practices**: Clean code, separation of concerns, testing support
 
 Dự án thể hiện đầy đủ quy trình phát triển full-stack web application từ frontend đến backend, database và deployment automation.
+
